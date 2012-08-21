@@ -1,0 +1,684 @@
+<html>
+<head>
+  <title>Provenance Map Orbiter &ndash; Hacking Guide</title>
+  <style type="text/css">
+    .spacing li { margin-bottom: 2ex; }
+    .tight li { margin-bottom: 0; }
+    ol.secondary { list-style-type: lower-latin; }
+  </style>
+</head>
+<body>
+
+  <h1>Provenance Map Orbiter &ndash; Hacking Guide</h1>
+
+  <h2>Table of Contents</h2>
+
+  <ol>
+    <li><a href="#build_and_run">Building and Running Orbiter</a>
+    </li>
+    <li><a href="#code_org">Basic Code Organization</a>
+    </li>
+    <li><a href="#orbiter_core">Core Orbiter Classes</a>
+    </li>
+    <li><a href="#graph_api">Graph API</a>
+      <ol class="secondary">
+        <li><a href="#graph_api_basegraph">BaseGraph &ndash; the Graph Structure</a></li>
+        <li><a href="#graph_api_graph">Graph&lt;N, E&gt; &ndash; the Type-Safety Layer</a></li>
+        <li><a href="#graph_api_pgraph">PGraph &ndash; the Provenance Graph</a></li>
+        <li><a href="#graph_api_summary">Graph Summarization</a></li>
+        <li><a href="#graph_api_layout">Graph Layout</a></li>
+        <li><a href="#graph_api_display">Graph Display</a></li>
+      </ol>
+    </li>
+    <li><a href="#supporting_api">Supporting APIs</a>
+      <ol class="secondary">
+        <li><a href="#supporting_api_jobs">Jobs</a></li>
+        <li><a href="#supporting_api_attributes">Attributes</a></li>
+        <li><a href="#supporting_api_filters">Filters</a></li>
+      </ol>
+    </li>
+  </ol>
+  
+  <h3>Appendices</h3>
+  
+  <ol>
+    <li><a href="javadoc/index.html">JavaDoc</a> (if not present,
+      generate it by running <code>ant javadoc</code>)
+    </li>
+  </ol>
+
+
+  <hr/>
+  <a name="build_and_run" />
+  <h2>Building and Running Orbiter</h2>
+  
+  <p>
+    The primary way to compile Orbiter is through <code>ant</code>:
+    
+    <ul>
+      <li><code>ant</code> &ndash; compile Orbiter and produce <code>dist/Orbiter.jar</code>,
+        which is a stand-alone archive with all Java dependencies statically linked.
+      </li>
+      <li><code>ant run</code> &ndash; run Orbiter; compile if necessary.</li>
+      <li><code>ant javadoc</code> &ndash; build JavaDoc inside <code>doc/javadoc/</code>.</li>
+      <li><code>ant clean</code> &ndash; clean the build.</li>
+    </ul>
+    
+    The <code>ant</code> settings can be changed by editing <code>build.xml</code>.
+    Once compiled, Orbiter can be run as follows:
+    
+    <pre>    java -jar Orbiter.jar [INPUT_FILE]</pre>
+    
+    where <code>INPUT_FILE</code> is an optional argument that specifies the provenance graph file
+    (or an Orbiter project) to load after the program starts.
+  </p>
+  
+  <p>
+    To develop Orbiter using Eclipse, it is recommended to import it as a Java Project (importing
+    as Java Ant Project should also work, but some all Eclipse features might not work).
+    Once the source code is imported, go to Project &ndash; Properties &ndash; Java Build Path &ndash;
+    Libraries, and then use "Add JARs..." to add all <code>.jar</code> files from the <code>lib/</code>
+    subdirectory to the project.
+  </p>
+
+
+  <hr/>
+  <a name="code_org" />
+  <h2>Basic Code Organization</h2>
+
+  <p>
+    The code is organized into three basic parts:
+    
+    <ul class="spacing">
+      <li><code>edu.harvard.util.*</code> &mdash;
+        A collection of miscellaneous utility classes, not specific for the PASS project.
+        They are designed to be independent from the rest of the code, so that the entire
+        <code>util</code> package can be easily reused in any other Java project.
+      </li>
+      <li><code>edu.harvard.pass.*</code>, but without the <code>orbiter</code> package &mdash;
+        Classes specific to provenance. They are designed specifically to work well with
+        the PASS project, but at the same time, to be general enough to work with other kinds
+        of provenance data, such as OPM (although not all features might be supported).
+        Most of the package is devoted to provenance graph handling. The code is designed
+        to be reusable in other kinds of provenance or PASS-related projects outside of Orbiter.
+      </li>
+      <li><code>edu.harvard.pass.orbiter.*</code> &mdash;
+        Code specific to Orbiter. It consists primarily of GUI and of the <code>Document</code>
+        class, which represents a document loaded into Orbiter. <code>Document</code> also contains
+        the methods for importing provenance graphs and high-level code for importing and exporting
+        the <code>.orb</code> and <code>.orc</code> (which stands for "<code>.orb</code> compressed")
+        Orbiter project files.
+    </ul>
+  </p>
+  
+  
+  <hr />
+  <a name="orbiter_core" />
+  <h2>Core Orbiter Classes</h2>
+  
+  <p>
+    The main class of the project is <code>edu.harvard.pass.orbiter.Main</code>, which contains
+    the entry point of the application. The <code>Main.main()</code> method parses
+    the command-line arguments, configures look-and-feel, and instantiates the main window &ndash;
+    <code>edu.harvard.pass.orbiter.gui.MainFrame</code>. The provenance graph displayed inside
+    the <code>MainFrame</code> is encapsulated inside
+    <code>edu.harvard.pass.orbiter.document.Document</code>, which just contains the provenance graph
+    (an instance of <code>edu.harvard.pass.PGraph</code>), the file from which it was loaded,
+    and a short document name. The <code>Document</code> class has also methods for provenance graph
+    loading and export, as well as XML import and export using Orbiter's own <code>.orb</code>
+    and <code>.orc</code> formats (the latter stands for "<code>.orb</code> compressed").
+  </p>
+  
+  
+  <p>
+    The main window (<code>edu.harvard.pass.orbiter.gui.MainFrame</code>) is composed of
+    the following components:
+    
+    <ul class="spacing">
+      <li>Main menu &ndash; contains the basic commands (such as load and save), view settings,
+        and basic graph transformations, including the graph derivation history. Most of
+        the menu events are processed by <code>MainFrame.EventHandler.actionPerformed()</code>.
+        The <code>ActionListener</code>'s for events from the derivation history are declared
+        inline inside <code>MainFrame.setPGraph()</code>.
+        The user can use "Transform &ndash; Apply Current Filters" to apply the filters
+        permanently to the displayed graph (the user can then still go back using the derivation
+        history in the "Transform" menu).
+      </li>
+      <li>Main area &ndash; <code>edu.harvard.util.gui.GraphDisplay</code> &ndash;
+        the component that displays the provenance graph (an instance
+        of <code>edu.harvard.pass.PGraph</code>, described <a href="#graph_api_pgraph">below</a>).
+        The appearance of the graph displayed in <code>GraphDisplay</code> is customized using
+        <code>edu.harvard.pass.orbiter.gui.PASSDecorator</code>, which specifies the node and edge
+        colors.
+      </li>
+      <li>Right area:
+        <ul class="tight">
+          <li><code>edu.harvard.pass.orbiter.gui.LegendPanel</code> &ndash;
+            The legend displaying the node and edge colors, which are displayed using
+            <code>edu.harvard.pass.orbiter.gui.NodeEdgeIcon</code>. The drop-down menu
+            that specifies how the nodes are colored is linked with the graph display component
+            using the <code>PASSDecorator.getColorNodesBy()</code> and
+            <code>PASSDecorator.setColorNodesBy()</code> methods.
+          </li>
+          <li><code>edu.harvard.pass.util.gui.FilterListPanel</code> &ndash;
+            The user interface for specifying the node filters for the graph. The set of filters
+            edited by this component is shared with the filters used by the <code>GraphDisplay</code>,
+            (using the <code>GraphDisplay.addFilter()</code> method), so that the updates
+            are automatically reflected in the graph visualization.
+          </li>
+          <li><code>edu.harvard.pass.orbiter.gui.SearchPanel</code> &ndash;
+            The panel for searching nodes by attributes. It contains an instance of
+            <code>FilterListPanel</code> to specify the search filter. The matching nodes are displayed
+            in a <code>JList</code> and highlighted in the <code>GraphDisplay</code> component
+            (via the <code>GraphDisplay.addHighlightFilter()</code> method).
+          </li>
+        </ul>
+      </li>
+      <li>Bottom area:
+        <ul class="tight">
+          <li><code>edu.harvard.pass.orbiter.gui.NodeDetailPanel</code> &ndash;
+            Displays the properties of an selected node.
+          </li>
+          <li><code>edu.harvard.pass.util.gui.TimelineTree</code> &ndash;
+            The process tree superimposed on a timeline. The process tree is computed by calling
+            <code>edu.harvard.pass.algorithm.ProcessTreeSummarizer.computeProcessTimeline()</code>,
+            and the display colors are customized by supplying an instance of
+            <code>edu.harvard.pass.orbiter.gui.PASSTimelineDecorator</code>.
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </p>
+
+
+  <hr/>
+  <a name="graph_api" />
+  <h2>Graph API</h2>
+
+  <p>
+    The graphs in Orbiter use the API provided by the <code>edu.harvard.util.graph</code> package,
+    extended further by the <code>edu.harvard.pass</code> package. The overall graph API can be broken
+    down into the following three levels, each adding another layer of functionality:
+    
+    <ol class="spacing">
+      <li><code>edu.harvard.util.graph.BaseGraph</code> contains just the graph structure. Nodes
+        and edges can have <code>String</code> labels, but they do not carry any other values.
+        The <code>BaseGraph</code> should not be instantiated directly, but rather using the thin
+        layer described below. It uses the following classes:
+        <ul class="tight">
+          <li><code>edu.harvard.util.graph.BaseNode</code> &ndash; a node</li>
+          <li><code>edu.harvard.util.graph.BaseEdge</code> &ndash; a directed edge</li>
+          <li><code>edu.harvard.util.graph.BaseSummaryNode extends BaseNode</code> &ndash;
+            a summary node that contains multiple <code>BaseNode</code>'s
+            or <code>BaseSummaryNode</code>'s
+          </li>
+        </ul>
+      </li>
+      <li><code>edu.harvard.util.graph.Graph&lt;N, E&gt; extends BaseGraph</code> is a very thin layer
+        that allows the programmer to supply her own classes for graphs, nodes, and edges, which carry other
+        values beside <code>String</code> labels, and which can have additional methods. All classes
+        at this layer use Java generics &ndash; <code>&lt;N&gt;</code> is the user class for nodes
+        (which extends <code>Node&lt;E&gt;</code>), and <code>&lt;E&gt;</code> is the class for edges
+        (which extends <code>Edge&lt;N&gt;</code>).
+        <ul class="tight">
+          <li><code>edu.harvard.util.graph.Node&lt;E&gt; extends BaseNode</code> &ndash; a node</li>
+          <li><code>edu.harvard.util.graph.Edge&lt;E&gt; extends BaseEdge</code> &ndash; a directed edge</li>
+          <li><code>edu.harvard.util.graph.SummaryNode&lt;N, E&gt; extends BaseSummaryNode</code> &ndash;
+            a summary node (note that the programmer cannot provide her own class for summary nodes)
+          </li>
+        </ul>
+      </li>
+      <li><code>edu.harvard.util.pass.PGraph extends edu.harvard.util.graph.Graph&lt;PNode, PEdge&gt;</code>
+        represents a provenance graph. It uses the thin layer described above to provide the following
+        classes for nodes and edges, which contain additional fields and methods specific for provenance:
+        <ul class="tight">
+          <li><code>edu.harvard.util.pass.PNode extends Node&lt;PEdge&gt;</code> &ndash; a node</li>
+          <li><code>edu.harvard.util.pass.PEdge extends Edge&lt;PNode&gt;</code> &ndash; an edge</li>
+        </ul>
+      </li>
+    </ol>
+  </p>
+  
+  <a name="graph_api_basegraph" />
+  <h3>BaseGraph &ndash; the Graph Structure</h3>
+  
+  <p>
+    The graph at the level of <code>BaseGraph</code> contains just the graph structure, node and edge
+    labels, and summary nodes. It also contains a collection of already-computed graph layouts, since
+    they only depend on the graph structure, without the need of any other semantic information.
+  </p>
+  
+  <p>
+    <code>BaseGraph</code> represents the graph as <code>Vector</code>'s of nodes and edges, which
+    can be accessed via the following methods:
+    <ul>
+      <li><code>public Collection&lt;BaseNode&gt; getBaseNodes()</code></li>
+      <li><code>public Collection&lt;BaseEdge&gt; getBaseEdges()</code></li>
+    </ul>
+    Nodes and edges can be also accessed one at a time, using the following methods:
+    <ul>
+      <li><code>public BaseNode getBaseNode(int index)</code> &ndash;
+        Retrieve a node by its index in the <code>Vector</code> of nodes. The value of the index
+        for a specific node can be determined using the <code>BaseNode.getIndex()</code> method.
+        This can be also though of as an index in the adjacency matrix.
+      </li>
+      <li><code>public BaseNode getBaseNodeByID(int id)</code> &ndash;
+        Retrieve a node by a unique user-specified numerical ID, which can be set using
+        <code>BaseNode.setID(int id)</code>.
+      </li>
+      <li><code>public BaseEdge getBaseEdge(int index)</code> &ndash;
+        Retrieve an edge by its index in the <code>Vector</code> of edges. The value of the index
+        for a specific edge can be determined using the <code>BaseEdge.getIndex()</code> method.
+      </li>
+      <li><code>public BaseEdge getBaseEdgeExt(BaseNode from, BaseNode to)</code> &ndash;
+        Find an edge using the <code>from</code> and <code>to</code> endpoints; return <code>null</code>
+        if not found.
+      </li>
+      <li><code>public BaseEdge getBaseEdge(BaseNode from, BaseNode to)</code> &ndash;
+        Find an edge with the specified endpoints just like the previous method, but rather
+        throw a <code>NoSuchElementException</code> if the edge is not found.
+      </li>
+    </ul>
+  </p>
+  
+  <p>
+    <code>BaseNode</code> contains methods for accessing its user-specified numerical ID and label,
+    and methods for retrieving the collection of incoming and outgoing edges. <code>BaseEdge</code>
+    contains methods for accessing its label and the "from" and "to" nodes. Please refer to the attached
+    JavaDoc for details.
+  </p>
+  
+  
+  <a name="graph_api_graph" />
+  <h3>Graph&lt;N, E&gt; &ndash; the Type-Safety Layer</h3>
+  
+  <p>
+    <code>Graph&lt;N, E&gt;</code> extends <code>BaseGraph</code> to provide a graph, where nodes
+    and edges are represented by user-supplied semantically rich classes. A user-supplied class
+    <code>N</code> that represents nodes extends <code>Node&lt;E&gt;</code>, and the class <code>E</code>
+    that represents edges extends <code>Edge&lt;N&gt;</code>. This layer of graph API does not provide
+    any new functionality other than type-safety.
+  </p>
+  
+  
+  <a name="graph_api_pgraph" />
+  <h3>PGraph &ndash; the Provenance Graph</h3>
+  
+  <p>
+    The provenance graph API consists of the following four core classes:
+    
+    <ul class="spacing">
+      <li><code>edu.harvard.util.pass.PGraph extends Graph&lt;PNode, PEdge&gt;</code> &ndash;
+        the provenance graph.
+      </li>
+      <li><code>edu.harvard.util.pass.PObject</code> &ndash;
+        a provenance object, such as an artifact (file) or a process. Note that a single object
+        can be represented in the provenance graph by multiple nodes, which represent different versions
+        of the object at different points in time. The <code>PObject</code> contains attributes that are
+        common to all nodes that represent the same object, such as the object ID, name, and type.
+        The <code>Vector</code> of nodes that represent the object in the provenance graph can be
+        obtained by calling the <code>getVersions()</code> object (which might contain <code>null</code>'s
+        if some of the version numbers are skipped).
+        <code>PObject</code> does not descend from any class in the graph API.
+      </li>
+      <li><code>edu.harvard.util.pass.PNode extends Node&lt;PEdge&gt;</code> &ndash;
+        a provenance node, which is a specific version of a provenance object (<code>PObject</code>).
+        It contains attributes that are specific to the particular version of the object the node
+        is associated with, such as the version number or the time-stamp (note that the time-stamps
+        are reported relative to <code>PGraph.getTimeBase()</code>). The associated provenance
+        object can be retrieved using the <code>getObject()</code> method.
+      </li>
+      <li><code>edu.harvard.util.pass.PEdge extends Edge&lt;PNode&gt;</code> &ndash;
+        an edge between two provenance nodes. This could be a dependency edge or a version edge.
+      </li>
+    </ul>
+  </p>
+  
+  <p>
+    <code>PGraph</code> uses the following two important classes:
+    
+    <ul class="spacing">
+      <li><code>edu.harvard.util.pass.PMeta</code> &ndash;
+        the meta-data that map the specific edge labels, object types, and attribute names
+        to universally meaningful <code>enum</code>'s. For example, it would map <code>FILE</code>
+        and <code>NP_FILE</code> PASS object types to the OPM <code>Artifact</code> type.
+        This class allows Orbiter to import provenance graphs from non-PASS systems.
+      </li>
+      <li><code>edu.harvard.util.pass.PGraphStat</code> &ndash;
+        basic statistics of the provenance graph, such as the minimum and the maximum time-stamp.
+      </li>
+    </ul>
+  
+    Please refer to the JavaDoc for the detailed information about the methods.
+  </p>
+  
+  <p>
+    A provenance graph can be imported from multiple formats, such as Twig, OPM, or RDF.
+    Parsers for each of these formats are in the package <code>edu.harvard.pass.parser</code>.
+    Each parser implements the <code>Parser</code> interface, and it can also optionally implement
+    the <code>HasWizardPanelConfigGUI</code> interface that allows it to be configured using a GUI
+    incorporated into Orbiter's import file dialog.
+  </p>
+  
+  <p>
+    To use a parser, use the following steps:
+    
+    <ol>
+      <li>Call <code>initialize(File file)</code> with the file that needs to be parsed</li>
+      <li>Configure the parser, either manually, or through a GUI by calling the
+        <code>createConfigurationGUI()</code> method if the parser implements the
+        <code>HasWizardPanelConfigGUI</code> interface.
+      </li>
+      <li>Call <code>parse(File file, ParserHandler handleer)</code> with the input file
+        and the handler for the parser events, which can be obtained by instantiating
+        a <code>PGraph</code> and then calling <code>PGraph.getParserHandler()</code>
+        on the new instance.
+      </li>
+    </ol>
+  </p>
+  
+  <p>
+    Finally, a <code>PGraph</code> instance can be serialized to XML using
+    <code>writeToXML(javax.xml.transform.sax.TransformerHandler hd)</code>.
+    To obtain the SAX parser for the <code>PGraph</code>, call the
+    <code>PGraph.createSAXParserHandler()</code> static method.
+  </p>
+  
+  
+  <a name="graph_api_summary" />
+  <h3>Graph Summarization</h3>
+  
+  <p>
+    <code>BaseSummaryNode</code> (and <code>SummaryNode</code> in the next layer of the API) represents
+    a collection of <code>BaseNode</code>'s, which can be used for graph summarization.
+    A summary node can contain additional summary nodes, so the summary nodes form a tree.
+    The ability of summary nodes to nest allows an already summarized graph to be
+    further summarized, which is very useful for visualizing large graphs.
+    A root of the tree of summary nodes can be accessed using <code>BaseGraph.getRootBaseSummaryNode()</code>
+    or <code>Graph.getRootSummaryNode()</code>. The contents of a summary node can be accessed using
+    the following two methods:
+    
+    <ul>
+      <li><code>public Set&lt;BaseNode&gt; getChildren()</code> &ndash;
+        Get the collection of children nodes, including nested summary nodes (recall that
+        <code>BaseSummaryNode</code> extends <code>BaseNode</code>)
+      </li>
+      <li><code>public Set&lt;BaseEdge&gt; getInternalEdges()</code> &ndash;
+        Get a set of edges between the children nodes returned by the previous method.
+      </li>
+    </ul>
+    
+    The summary node a given <code>BaseNode</code> belongs to can be determined using
+    <code>BaseNode.getParent()</code>. Other methods for traversing the tree of summarization nodes
+    (members of the <code>BaseNode</code> and <code>BaseSummaryNode</code> classes) are described
+    in the JavaDoc.
+  </p>
+  
+  <p>
+    The graph can be summarized by manually creating summary nodes and moving the nodes to their
+    respective summary nodes, or automatically using a graph summarization algorithm. To do this
+    manually,
+    
+    <ol>
+      <li>Call <code>BaseGraph.summarizationBegin()</code> on the underlying graph.</li>
+      <li>Create a summary node using one of the constructors in class <code>SummaryNode&lt;N, E&gt;</code>.
+        Do not use <code>BaseSummaryNode</code> directly, since a large subset of the functionality
+        outside of the graph API package depends on it.
+      </li>
+      <li>Move nodes to the summary node using one of the <code>moveBaseNodeFrom*</code>,
+        <code>moveNodeFrom*</code>, or <code>moveSummaryNodeFrom*</code> methods described in the JavaDoc.
+        Do not call the <code>addChild()</code> method directly.
+      </li>
+      <li>Repeat steps 2 and 3 as necessary.</li>
+      <li>Finish by calling <code>BaseGraph.summarizationEnd()</code> on the underlying graph.</li>
+    </ol>
+    
+    Several methods useful for building summaries are implemented inside the
+    <code>edu.harvard.util.graph.summarizer.SummarizerUtils</code> class; please refer to JavaDoc
+    for details. Whenever possible, try to design your summarization algorithms so that they can be
+    used to further summarize an already-summarized graph. A class that performs graph summarization
+    should ideally implement the <code>edu.harvard.util.graph.summarizer.GraphSummarizer</code> interface.
+  </p>
+  
+  <p>
+    Summaries can be created automatically using the
+    <code>edu.harvard.util.graph.summarizer.GenericGraphSummarizer</code> class by supplying
+    an appropriate instance of a <code>BaseSummaryChecker</code>, which would ideally also implement
+    the <code>BaseSummaryLabeler</code>. Please refer to the source code of <code>BaseSummaryCheckers</code>
+    for an example. The disadvantage of this approach is that it is very slow,
+    with O(<em>n</em><sup><small>3</small></sup>)
+    worst-case performance, where <em>n</em> is the number of nodes.
+  </p>
+  
+  <p>
+    <code>SmallGroupsGraphSummarizer</code> is a very generic way of arbitrarily breaking large summary
+    nodes into smaller nodes, so that, for example, their sizes are manageable by Graphviz. Finally,
+    the following two classes can be used to summarize provenance graphs (instances of <code>PGraph</code>):
+    <ul>
+      <li><code>edu.harvard.pass.algorithm.FileExtSummarizer</code> &ndash;
+        Group files by their file extension.
+      </li>
+      <li><code>edu.harvard.pass.algorithm.ProcessTreeSummarizer</code> &ndash;
+        Hierarchically summarize the graph using the control flow (process tree) information.
+      </li>
+    </ul>
+  </p>
+  
+  
+  <a name="graph_api_layout" />
+  <h3>Graph Layout</h3>
+  
+  <p>
+    The graph layout is represented as a mapping of <code>BaseNode</code>'s and <code>BaseEdge</code>'s
+    to <code>GraphLayoutNode</code>'s and <code>GraphLayoutEdge</code>'s. A layout can be optimized
+    for semantic zoom, in which case it can be computed lazily as the user zooms into a summary node.
+    If the graph layout is optimized in such way, <code>GraphLayout.isOptimizedForZoom()</code> returns
+    <code>true</code>. The core classes of the graph layout API are:
+    
+    <ul class="spacing">
+      <li><code>edu.harvard.util.graph.layout.GraphLayout</code> &ndash;
+        The graph layout. This is an abstract class, which can be instantiated using one of the following
+        two options:
+        <ul class="tight">
+          <li><code>edu.harvard.util.graph.layout.FastGraphLayout</code> &ndash;
+            A <code>Vector</code>-based implementation that trades speed for space.
+          </li>
+          <li><code>edu.harvard.util.graph.layout.SparseGraphLayout</code> &ndash;
+            A <code>HashMap</code>-based implementation useful for layouts of parts of a graph,
+            or perhaps lazily-computed layouts, if we do not expect to compute the entire layout.
+          </li>
+        </ul>
+        The class uses <code>GraphLayoutStat</code> to keep track of the size of
+        the graph layout.
+      </li>
+      <li><code>edu.harvard.util.graph.layout.GraphLayoutNode</code> &ndash;
+        A node layout, consisting of its center X, Y coordinates and its width and height.
+        In the current version of the API, it does not specify the shape of the node.
+      </li>
+      <li><code>edu.harvard.util.graph.layout.GraphLayoutEdge</code> &ndash;
+        An edge layout. It can either be a straight line, where the endpoints are the X, Y
+        coordinates of the two endpoint <code>GraphLayoutNode</code>'s, or it can be a B-spline,
+        in which case the arrays returned by the <code>getX()</code> and <code>getY()</code>
+        methods contain the spline control points.
+      </li>
+    </ul>
+    
+    These classes further contain methods for transposing and rescaling the graph layout, and for
+    merging multiple graph layouts. Please refer to the JavaDoc for details.
+  </p>
+  
+  <p>
+    The graph layout can be computed by a class that implements the <code>GraphLayoutAlgorithm</code>
+    interface, and the computed layout can be then stored inside the <code>BaseGraph</code> by calling
+    its <code>addLayout()</code> method.
+  </p>
+  
+  <p>
+    Currently, the only implemented graph layout algorithm is
+    <code>edu.harvard.util.graph.layout.Graphviz</code>. It is a wrapper around command-line tools
+    for computing the layout, such as <code>dot</code> or <code>sfdp</code>. But it is more than just
+    a simple wrapper &ndash; it can compute the layout of a summarized graph by recursively computing
+    the layouts within each summary node and then merging them together, which allows it to scale to
+    very large graphs if each summary node is reasonably small (at most a few hundred nodes), as well
+    as to spread the computation over multiple CPU cores. It can also produce lazily-computed graph
+    layouts optimized for semantic zoom.
+  </p>
+  
+  
+  <a name="graph_api_display" />
+  <h3>Graph Display</h3>
+  
+  <p>
+    The graph can be displayed using the <code>edu.harvard.util.gui.GraphDisplay&lt;N, E&gt;</code>
+    component. It displays the graph using the layout returned
+    by <code>BaseGraph.getDefaultLayout()</code>. If the layout is not entirely computed, such as
+    if it is a lazily-computed layout, and the component is configured to use semantic zoom, it uses
+    the <code>GraphLayout.getAlgorithm().updateLayout()</code> method to compute the layout for
+    the nodes that it needs to display. The background, node, and edge colors are selected
+    by a user-supplied instance of <code>edu.harvard.util.gui.GraphDecorator&lt;N, E&gt;</code>
+    (or <code>edu.harvard.util.gui.DefaultGraphDecorator&lt;N, E&gt;</code>).
+  </p>
+  
+  <p>
+    The <code>GraphDisplay</code> component filters the nodes it displays by checking each node
+    against the filters added via the <code>addFilter()</code> method, and it highlights the nodes
+    that satisfy the filters added by <code>addHighlightFilter()</code> method. It registers
+    its own <code>FilterListener</code>'s, so that the filter changes are automatically reflected
+    in the graph. <code>GraphDisplay</code> also highlights nodes selected using the
+    <code>addNodeToSelection()</code> and <code>selectNode()</code> methods; the selection is cleared
+    by calling <code>clearSelection()</code>.
+  </p>
+  
+  <p>
+    If the (currently private) <code>GraphDisplay.autoManageSelection</code> flag is set, the component
+    automatically manages the node selection by responding to user's mouse events. Other objects can
+    register their <code>edu.harvard.util.gui.GraphDisplayListener&lt;N, E&gt;</code>'s to watch for
+    user mouse click evennts and node selection events.
+  </p>
+  
+  <p>
+    Internally, <code>GraphDisplay</code> manages a <em>graph cache</em>, which contains the sets
+    of currently displayed nodes, edges, collapsed summary nodes, expanded summary nodes, highlighted
+    nodes, and selected nodes. The contents of these sets depend on the state of the summary nodes
+    (expanded/collapsed) and the filters. Nodes are mapped to the nodes that are actually being displayed
+    by the <code>GraphDisplay.map()</code> function. If a node is displayed, it maps to itself.
+    If a node is hidden being a collapsed summary nodes, it maps to the collapsed node that is actually
+    displayed. Summary nodes can be expanded and collapsed automatically via semantic zoom, or manually
+    using the <code>expandNode()</code> and <code>collapseNode()</code> methods.
+  </p>
+  
+
+  <hr/>
+  <a name="supporting_api" />
+  <h2>Supporting APIs</h2>
+  
+  <p>
+    This section contains a description of several API's that drive Orbiter's infrastructure,
+    but are not directly related to graphs.
+  </p>
+  
+  
+  <a name="supporting_api_jobs" />
+  <h3>Jobs</h3>
+
+  <p>
+    Most non-trivial computations in Orbiter are encapsulated within a <code>Job</code>
+    object. For example, the ProvRank computation in <code>edu.harvard.pass.algorithm.ProvRank</code>
+    can be executed as a <code>Job</code> using the <code>edu.harvard.pass.job.ProvRankJob</code> wrapper.
+    The advantage of using <code>Job</code> instead of executing the computation directly is the ability
+    to easily show the user the progress of the computation and giver her the ability to cancel it,
+    assuming that the job is cancelable (<code>Job.isCancelable()</code> returns <code>true</code>).
+  </p>
+  
+  <p>
+    A job wrapper class implements the <code>edu.harvard.util.job.Job</code> interface or extends
+    <code>edu.harvard.util.job.AbstractJob</code>, in which some of the methods provided by<code>Job</code>
+    are already implemented. Jobs are executed using an instance of
+    <code>edu.harvard.util.job.JobMaster</code>, most typically using
+    <code>edu.harvard.util.gui.JobMasterDialog</code>, which displays the progress in a dialog window,
+    or using <code>edu.harvard.util.job.DefaultJobMaster</code>, which does not have any GUI.
+    Jobs report their progress to the job master via an instance of
+    <code>edu.harvard.util.job.JobObserver</code> passed to the <code>Job</code> object.
+  </p>
+  
+  <p>
+    Several useful job wrappers are predefined in the <code>edu.harvard.util.job</code>
+    and <code>edu.harvard.pass.job</code> packages. The jobs for loading and exporting a provenance
+    graph are declared in the <code>edu.harvard.pass.orbiter.document</code> package.
+  </p>
+  
+  
+  <a name="supporting_api_attributes" />
+  <h3>Attributes</h3>
+
+  <p>
+    The attributes API is useful for uniformly exporting properties of an object, especially
+    if it needs to be edited by the end user. An attribute extends
+    <code>edu.harvard.util.attribute.AbstractAttribute</code>.
+    An attribute contains a name, a value, and several fields describing its properties.
+    For example, an attribute that encapsulates a <code>Comparable</code> value can have a minimum
+    and a maximum value. Several types of attributes can be also declared as imprecise, in which case
+    the UI can choose an imprecise method for specifying the value, such as a <code>JSlider</code>
+    in the case of numerical values. An attribute can optionally specify an operator, such as "="
+    (default), "&lt;", or "&gt;". This allows the user to specify constructs such as "display nodes
+    with ProvRank &lt; 0.05". Other objects in the program can register their
+    <code>edu.harvard.util.attribute.AttributeListener</code>'s to watch for the attribute changes.
+  </p>
+  
+  <p>
+    Simple attributes are instances of <code>edu.harvard.util.attribute.Attribute&lt;T&gt;</code>,
+    where <code>T</code> is the type of the attribute (such as <code>Integer</code> or <code>String</code>).
+    Complex attributes that consists of multiple attributes are instances
+    of <code>edu.harvard.util.attribute.ComplexAttribute</code>.
+  </p>
+  
+  <p>
+    The simplest way to enable the user to edit a list of attributes is via an instance of
+    <code>edu.harvard.util.gui.AttributeTable</code>. <code>AttributeTable</code> creates
+    a <code>JTable</code> with one row for each attribute, and it automatically chooses the appropriate
+    editor component based on the attribute type and properties.
+  </p>
+  
+  
+  <a name="supporting_api_filters" />
+  <h3>Filters</h3>
+  
+  <p>
+    The package <code>edu.harvard.util.filter</code> provides a generic filtering capability.
+    A filter for objects of type <code>T</code> extends the abstract class
+    <code>edu.harvard.util.filter.Filter&lt;T&gt;</code>, and a value (an object) can be checked
+    against the filter by calling <code>Filter.accept(T value)</code> on the filter instance.
+    When a filter changes, it fires events to instances of 
+    <code>edu.harvard.util.filter.FilterListener&lt;T&gt;</code> registered with the filter
+    using the <code>Filter.addFilterListener()</code> method.
+  </p>
+  
+  <p>
+    <code>FilterSet&lt;T&gt;</code> is an implementation of <code>Filter&lt;T&gt;</code> that
+    checks whether the given value is in a <code>Set</code>. Multiple filters of the same type
+    can be combined using <code>SetFilter&lt;T&gt;</code>. Filters can be created either manually
+    or through an instance of <code>edu.harvard.util.filter.FilterFactory</code>, which can create
+    filters directly from their <code>Class</code> objects.
+  </p>
+  
+  <p>
+    Provenance graph-specific filters are in package <code>edu.harvard.pass.filter</code>.
+    <code>edu.harvard.pass.filter.PNodeFilter</code> is an abstract class for node filters.
+    A collection of filters is declared inside <code>edu.harvard.pass.filter.PASSFilter</code>
+    and <code>edu.harvard.pass.filter.AncestryFilter</code>.
+    <code>edu.harvard.pass.filter.PNodeSetFilter</code> is a <code>PNode</code>-specific version
+    of <code>SetFilter</code>. Finally, the list of all supported provenance node filters
+    is contained within <code>edu.harvard.pass.filter.SupportedFilters</code>, a subclass
+    of <code>FilterFactory</code>.
+  </p>
+  
+  <p>
+    The filters can be edited by the end user via the
+    <code>edu.harvard.pass.util.gui.FilterListPanel</code> component. It contains a table of existing
+    filters (implemented as an instance of <code>edu.harvard.pass.util.gui.AttributeTable</code>)
+    and buttons for adding and removing filters.
+  </p>
+  
+
+</body>
+</html>

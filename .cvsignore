@@ -1,0 +1,7 @@
+.classpath
+.externalToolBuilders
+.project
+.DS_Store
+*.bbprojectd
+bin
+dist
