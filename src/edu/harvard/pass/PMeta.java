@@ -149,10 +149,15 @@ public class PMeta {
 		
 		// Non-standard
 		
-		m.addObjectExtType("Database", PObject.Type.ARTIFACT);
 		m.addObjectExtType("Operator", PObject.Type.PROCESS);
 		m.addObjectExtType("Operation", PObject.Type.PROCESS);
+		m.addObjectExtType("Procedure", PObject.Type.PROCESS);
+		m.addObjectExtType("Start", PObject.Type.PROCESS);
+		m.addObjectExtType("Finish", PObject.Type.PROCESS);
+		
+		m.addObjectExtType("Database", PObject.Type.ARTIFACT);
 		m.addObjectExtType("Token", PObject.Type.ARTIFACT);
+		m.addObjectExtType("Data", PObject.Type.ARTIFACT);
 		
 		return m;
 	}

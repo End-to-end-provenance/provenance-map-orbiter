@@ -31,6 +31,8 @@
 
 package edu.harvard.pass.parser;
 
+import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -38,18 +40,24 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.net.URI;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Vector;
 
+import javax.swing.AbstractListModel;
 import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 
 import edu.harvard.pass.PMeta;
@@ -62,6 +70,7 @@ import edu.harvard.pass.cpl.CPLObjectVersion;
 import edu.harvard.pass.cpl.CPLPropertyEntry;
 import edu.harvard.util.ParserException;
 import edu.harvard.util.ParserFormatException;
+import edu.harvard.util.Utils;
 import edu.harvard.util.gui.HasWizardPanelConfigGUI;
 import edu.harvard.util.gui.WizardPanel;
 
@@ -85,12 +94,16 @@ public class CPLParser implements Parser, HasWizardPanelConfigGUI {
 	/// The main CPL object
 	protected CPLObject object;
 	
+	/// List of matching CPL objects
+	protected Vector<CPLObject> matchingObjects;
+	
 	
 	/**
 	 * Create an instance of class CPLParser
 	 */
 	public CPLParser() {
 		object = null;
+		matchingObjects = null;
 	}
 	
 	
@@ -119,6 +132,7 @@ public class CPLParser implements Parser, HasWizardPanelConfigGUI {
 		
 		r.add(new AttachPanel());
 		r.add(new OpenObjectPanel());
+		r.add(new ChooseObjectPanel());
 		
 		return r;
 	}
@@ -495,7 +509,7 @@ public class CPLParser implements Parser, HasWizardPanelConfigGUI {
 
 			// Header
 
-			topLabel = new JLabel("Please input the CPL object refernce:");
+			topLabel = new JLabel("Please input the CPL object reference:");
 			topLabel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
 			c.fill = GridBagConstraints.HORIZONTAL;
 			c.gridx = 0;
@@ -623,7 +637,7 @@ public class CPLParser implements Parser, HasWizardPanelConfigGUI {
 			lastType = typeField.getText();
 			
 			try {
-				object = CPLObject.lookup(originator, name, type);
+				matchingObjects = CPLObject.lookupAll(originator, name, type);
 			}
 			catch (CPLException e) {
 				JOptionPane.showMessageDialog(getPanel(), e.getMessage(),
@@ -677,6 +691,192 @@ public class CPLParser implements Parser, HasWizardPanelConfigGUI {
 			}
 			
 			updateEnabled();
+		}
+	}
+	
+	
+	/**
+	 * Configuration panel - choose an object from a list of matching objects
+	 */
+	private class ChooseObjectPanel extends WizardPanel implements ActionListener {
+		
+		private JLabel topLabel;
+		private JScrollPane objectListScroll;
+		private CPLObjectListModel objectListModel;
+		private JList objectList;
+		
+		
+		/**
+		 * Create an instance of ChooseObjectPanel
+		 */
+		public ChooseObjectPanel() {
+			super("Choose a CPL Object");
+
+
+			// Initialize the panel
+
+			panel.setLayout(new BorderLayout());
+
+
+			// Header
+
+			topLabel = new JLabel("Choose an object from the following matches:");
+			topLabel.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
+			panel.add(topLabel, BorderLayout.NORTH);
+			
+			
+			// List of objects
+			
+			objectListModel = new CPLObjectListModel();
+			objectList = new JList(objectListModel);
+			objectList.setCellRenderer(new CPLObjectCellRenderer());
+			
+			objectListScroll = new JScrollPane(objectList);
+			panel.add(objectListScroll, BorderLayout.CENTER);
+			
+
+			// Finish
+
+			updateEnabled();
+		}
+		
+		
+		/**
+		 * Prepare the panel to be displayed (this is a callback
+		 * for just before the wizard panel is displayed)
+		 */
+		protected void prepare() {
+			
+			Collections.sort(matchingObjects, new Comparator<CPLObject>() {
+				@Override
+				public int compare(CPLObject a, CPLObject b) {
+					if (a.getCreationTime() > b.getCreationTime()) return -1;
+					if (a.getCreationTime() < b.getCreationTime()) return -1;
+					return a.toString().compareTo(b.toString());
+				}
+			});
+			
+			objectListModel.setData(matchingObjects);
+			
+			if (matchingObjects.size() > 0) objectList.setSelectedIndex(0);
+		}
+
+
+		/**
+		 * Callback for when the next button was clicked
+		 */
+		protected void wizardNext() {
+			
+			Object selectedObject = objectList.getSelectedValue();
+			if (selectedObject == null) {
+				JOptionPane.showMessageDialog(getPanel(), "Please first select an object",
+						"CPL Error", JOptionPane.ERROR_MESSAGE);
+				cancelNext();
+				return;
+			}
+			
+			if (!(selectedObject instanceof CPLObject)) {
+				throw new InternalError();
+			}
+			
+			object = (CPLObject) selectedObject;
+		}
+
+
+		/**
+		 * Update the enabled properties
+		 */
+		private void updateEnabled() {
+		}
+
+
+		/**
+		 * A callback for when an action has been performed
+		 * 
+		 * @param e the action event
+		 */
+		@Override
+		public void actionPerformed(ActionEvent e) {
+			
+			updateEnabled();
+		}
+		
+		
+		/**
+		 * The list model
+		 */
+		@SuppressWarnings("serial")
+		private class CPLObjectListModel extends AbstractListModel {
+			
+			private Vector<CPLObject> contents = new Vector<CPLObject>();
+
+			
+			/**
+			 * Get the element at the given index
+			 * 
+			 * @param index the index
+			 * @return the element at the given index
+			 */
+			@Override
+			public Object getElementAt(int index) {
+				return contents.get(index);
+			}
+
+			
+			/**
+			 * Get the size of the list
+			 * 
+			 * @return the size of the list
+			 */
+			@Override
+			public int getSize() {
+				return contents.size();
+			}
+			
+			
+			/**
+			 * Set the contents
+			 * 
+			 * @param c the new contents
+			 */
+			public void setData(Vector<CPLObject> c) {
+				
+				int n = contents.size();
+				contents.clear();
+				if (n > 0) fireIntervalRemoved(this, 0, n - 1);
+				
+				contents.addAll(c);
+				n = contents.size();
+				if (n > 0) fireIntervalAdded(this, 0, n - 1);
+			}
+		}
+
+		
+		/**
+		 *  The custom cell renderer
+		 */
+		@SuppressWarnings("serial")
+		class CPLObjectCellRenderer extends DefaultListCellRenderer {
+
+			/**
+			 * Return the cell renderer component
+			 */
+			public Component getListCellRendererComponent(JList list,
+					Object value, // value to display
+					int index, // cell index
+					boolean iss, // is the cell selected
+					boolean chf) // the list and the cell have the focus
+			{
+				CPLObject c = Utils.<CPLObject>cast(value);
+				
+				String label = "";
+				label += new java.sql.Date(1000L * c.getCreationTime());
+				label += " ";
+				label += new java.sql.Time(1000L * c.getCreationTime());
+
+				super.getListCellRendererComponent(list, label, index, iss, chf);
+				return this;
+			}
 		}
 	}
 }
