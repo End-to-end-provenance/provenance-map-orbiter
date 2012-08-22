@@ -387,6 +387,19 @@ public class PObject implements Comparable<PObject>, java.io.Serializable {
 	
 	
 	/**
+	 * Return the first freeze time
+	 * 
+	 * @return the freeze time of the first available version
+	 */
+	public double getFirstFreezeTime() {
+		for (PNode n : versions) {
+			if (n != null) return n.getFreezeTime();
+		}
+		return 0;
+	}
+	
+	
+	/**
 	 * Return the string representation of the object
 	 * 
 	 * @return the string representation

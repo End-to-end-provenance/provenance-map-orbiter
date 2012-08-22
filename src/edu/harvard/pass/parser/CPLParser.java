@@ -38,6 +38,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.net.URI;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -202,14 +203,24 @@ public class CPLParser implements Parser, HasWizardPanelConfigGUI {
 		
 		// Turn it into a provenance graph: Nodes and node properties
 		
+		HashMap<String, Integer> idToIndex = new HashMap<String, Integer>();
+		
 		for (CPLObjectVersion n : nodes) {
 			
+			if (!idToIndex.containsKey(n.getObject().toString())) {
+				idToIndex.put(n.getObject().toString(), idToIndex.size() + 1);
+			}
+			
+			String id = "" + idToIndex.get(n.getObject().toString()) + "." + n.getVersion();
+			if (n.getVersion() == 0) {
+				handler.loadTripleAttribute(id, "ORIGINATOR", n.getObject().getOriginator());
+				handler.loadTripleAttribute(id, "NAME", n.getObject().getName());
+				handler.loadTripleAttribute(id, "TYPE", n.getObject().getType());
+			}
+			
+			handler.loadTripleAttribute(id, "TIME", "" + n.getCreationTime());
 			if (n.getVersion() == 0 && objectsZero.contains(n.getObject())) continue;
 			
-			String id = "" + n;
-			handler.loadTripleAttribute(id, "ORIGINATOR", n.getObject().getOriginator());
-			handler.loadTripleAttribute(id, "NAME", n.getObject().getName());
-			handler.loadTripleAttribute(id, "TYPE", n.getObject().getType());
 			handler.loadTripleAttribute(id, "ID", "" + n.getObject());
 			
 			for (int v = 0; v <= n.getVersion(); v++) {
@@ -241,7 +252,9 @@ public class CPLParser implements Parser, HasWizardPanelConfigGUI {
 		// Turn it into a provenance graph: Edges and edge labels
 		
 		for (CPLAncestryEntry e : edges) {
-			if (e.getAncestor().getVersion() == 0 && objectsZero.contains(e.getAncestor().getObject())) continue;
+			if (e.isVersionDependency() 
+					&& e.getAncestor().getVersion() == 0
+					&& objectsZero.contains(e.getAncestor().getObject())) continue;
 			
 			String s_edge = "INPUT";
 			if (e.isDataDependency()) {
@@ -287,8 +300,10 @@ public class CPLParser implements Parser, HasWizardPanelConfigGUI {
 				}
 			}
 			
-			handler.loadTripleAncestry("" + e.getDescendant(),
-					s_edge, "" + e.getAncestor());
+			handler.loadTripleAncestry(
+					"" + idToIndex.get(e.getDescendant().getObject().toString()) + "." + e.getDescendant().getVersion(),
+					s_edge, 
+					"" + idToIndex.get(e.getAncestor().getObject().toString()) + "." + e.getAncestor().getVersion());
 		}
 		
 		

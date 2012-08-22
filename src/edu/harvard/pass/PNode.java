@@ -202,7 +202,11 @@ public class PNode extends Node<PNode, PEdge> implements Serializable, WithTimeI
 			return name;
 		}
 		
-		return getPublicID() + " " + name;
+		if (ver == 0 && getObject().getVersions().size() == 1) {
+			return name;
+		}
+		
+		return name + " [v. " + ver + "]";
 	}
 	
 	

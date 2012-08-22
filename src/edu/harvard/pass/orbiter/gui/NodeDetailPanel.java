@@ -186,7 +186,11 @@ public class NodeDetailPanel extends JPanel {
 		
 		// Basic node info
 		
-		labelField.setText(this.node.getLabel());
+		String prefix = "";
+		if (node instanceof PNode) {
+			prefix = "[" + ((PNode) node).getPublicID() + "] ";
+		}
+		labelField.setText(prefix + this.node.getLabel());
 		
 		
 		// PNode-specific information

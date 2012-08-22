@@ -879,7 +879,7 @@ public class PGraph extends Graph<PNode, PEdge, PSummaryNode, PGraph> implements
 					n.getObject().setParentFD(t.getFD());
 				}
 				
-				if (t.getVersion() == 0 && t.getFD() > 0) {
+				if (t.getVersion() == 0 && t.getFD() > 0 && "FORKPARENT".equalsIgnoreCase(s_edge)) {
 					fixForkparentEdges = true;
 					return;
 				}
@@ -970,7 +970,7 @@ public class PGraph extends Graph<PNode, PEdge, PSummaryNode, PGraph> implements
 					PObject parent = fdToObject.get(o.getParentFD());
 					
 					if (parent != null) {
-						double start = o.getNode(0).getFreezeTime();
+						double start = o.getFirstFreezeTime();
 						
 						if (parent.getLatestVersion() == 0) {
 							addEdge(new PEdge(on, getNode(parent, 0), PEdge.Type.CONTROL));
@@ -1009,8 +1009,19 @@ public class PGraph extends Graph<PNode, PEdge, PSummaryNode, PGraph> implements
 						PNode m = o.getVersions().get(j);
 						if (m == null) continue;
 						
-						PEdge e = new PEdge(m, n, PEdge.Type.VERSION);
-						addEdge(e);
+						// Add the version edge if it does not already exists
+						
+						boolean found = false;
+						for (PEdge e : m.getOutgoingEdges()) {
+							if (e.getType() == PEdge.Type.VERSION && e.getTo() == n) {
+								found = true;
+								break;
+							}
+						}
+						if (!found) {
+							PEdge e = new PEdge(m, n, PEdge.Type.VERSION);
+							addEdge(e);
+						}
 						break;
 					}
 				}

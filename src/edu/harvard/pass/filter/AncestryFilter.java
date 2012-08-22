@@ -107,7 +107,9 @@ public class AncestryFilter {
 				}
 				catch (Exception e) {
 					// TODO Do something saner
-					throw new RuntimeException("No such node: " + s); 
+					//throw new RuntimeException("No such node: " + s);
+					set(new HashSet<PNode>());
+					return;
 				}
 				
 				
@@ -206,7 +208,9 @@ public class AncestryFilter {
 				}
 				catch (Exception e) {
 					// TODO Do something saner
-					throw new RuntimeException("No such node: " + s); 
+					//throw new RuntimeException("No such node: " + s); 
+					set(new HashSet<PNode>());
+					return;
 				}
 				
 				

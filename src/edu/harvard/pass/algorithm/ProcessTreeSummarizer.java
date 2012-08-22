@@ -81,6 +81,7 @@ public class ProcessTreeSummarizer implements GraphSummarizer {
 		for (TimelineEvent<PObject> t : eventMap.values()) {
 			
 			for (PNode n : t.getValue().getVersions()) {
+				if (n == null) continue;
 				for (PEdge e : n.getIncomingEdges()) {
 					
 					if (e.getType() != PEdge.Type.CONTROL) continue;
@@ -180,6 +181,7 @@ public class ProcessTreeSummarizer implements GraphSummarizer {
 			// Add all versions of the process
 			
 			for (PNode n : o.getVersions()) {
+				if (n == null) continue;
 				summary.moveNodeFromParent(n);
 			}
 		}
