@@ -838,7 +838,9 @@ public class Graphviz implements ExternalFileConverter, Cancelable, GraphLayoutA
 		
 		try {
 			BaseSummaryNode root = graph.getRootBaseSummaryNode();
-			if (root == null) throw new InternalError();
+			if (root == null) {
+				throw new IllegalStateException("No root summary node (the graph was not summarized)");
+			}
 			SynchronizedJobObserver sjo = new SynchronizedJobObserver(observer);
 			layout = computeLayoutRecursively(root, levels, sjo);
 			
@@ -856,6 +858,10 @@ public class Graphviz implements ExternalFileConverter, Cancelable, GraphLayoutA
 			layout.setOptimizedForZoom(isZoomOptimized());
 		}
 		catch (RuntimeException e) {
+			setProcessHandle(false, null);
+			throw e;
+		}
+		catch (Error e) {
 			setProcessHandle(false, null);
 			throw e;
 		}

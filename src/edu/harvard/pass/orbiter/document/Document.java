@@ -369,24 +369,23 @@ public class Document implements java.io.Serializable {
 		Pointer<BaseGraph> bpg = new Pointer<BaseGraph>(graph);
 		
 		Class<? extends GraphSummarizer> summarizerClass
-			= SummarizationConfigPanel.SUMMARIZATION_ALGORITHMS.get(summarizationAlgorithm);
+			= SummarizationConfigPanel.SUMMARIZATION_ALGORITHMS.get(summarizationAlgorithm);	
+		if (summarizerClass == null) summarizerClass = NullSummarizer.class;
+	
+		try {
+			master.add(new GraphSummaryJob(summarizerClass.newInstance(), bpg));
+		} catch (InstantiationException e) {
+			throw new InternalError();
+		} catch (IllegalAccessException e) {
+			throw new InternalError();
+		}
 		
-		if (summarizerClass != null) {
-			try {
-				master.add(new GraphSummaryJob(summarizerClass.newInstance(), bpg));
-			} catch (InstantiationException e) {
-				throw new InternalError();
-			} catch (IllegalAccessException e) {
-				throw new InternalError();
-			}
-			
-			if (refineSummaryFileExt) {
-				master.add(new GraphSummaryJob(new FileExtSummarizer(), bpg, "Refining graph summary"));
-			}
-			
-			if (refineSummaryRandomly) {
-				master.add(new GraphSummaryJob(new SmallGroupsGraphSummarizer(), bpg, "Refining graph summary"));
-			}
+		if (refineSummaryFileExt) {
+			master.add(new GraphSummaryJob(new FileExtSummarizer(), bpg, "Refining graph summary"));
+		}
+		
+		if (refineSummaryRandomly) {
+			master.add(new GraphSummaryJob(new SmallGroupsGraphSummarizer(), bpg, "Refining graph summary"));
 		}
 	}
 
