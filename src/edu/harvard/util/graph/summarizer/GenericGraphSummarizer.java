@@ -61,6 +61,17 @@ public class GenericGraphSummarizer implements ObservableGraphSummarizer, Cancel
 	
 	
 	/**
+	 * Get the name of the summarization algorithm
+	 * 
+	 * @return the name of the summarization algorithm
+	 */
+	public String getName() {
+		return "Using " + checker.getClass().getCanonicalName();
+	}
+
+	
+	
+	/**
 	 * Recursively compute the graph summary
 	 * 
 	 * @param graph the graph

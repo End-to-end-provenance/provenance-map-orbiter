@@ -83,6 +83,32 @@ public abstract class GraphLayout implements Serializable {
 	
 	
 	/**
+	 * Create a stub for a graph layout from the given graph, algorithm, and description
+	 * 
+	 * @param graph the graph
+	 * @param algorithm the graph layout algorithm
+	 * @param description the layout description
+	 * @return an instance of FastGraphLayout just with the layout for the collapsed root summary node
+	 */
+	public static GraphLayout createStub(BaseGraph graph, GraphLayoutAlgorithm algorithm, String description) {
+		
+		GraphLayout layout = new FastGraphLayout(graph, algorithm, description);
+		
+		BaseSummaryNode root = graph.getRootBaseSummaryNode();
+		if (root == null) {
+			throw new IllegalStateException("No root summary node (the graph was not summarized)");
+		}
+		
+		GraphLayoutNode lr = new GraphLayoutNode(root, 0, 0);
+		layout.centerAt(0, 0);
+		lr.setSize(400, 300);
+		layout.addLayoutNode(lr);
+		
+		return layout;
+	}
+	
+	
+	/**
 	 * Return the graph the layout is computed for
 	 * 
 	 * @return the graph
@@ -271,6 +297,22 @@ public abstract class GraphLayout implements Serializable {
 	
 	
 	/**
+	 * Add a layout edge
+	 * 
+	 * @param edge the layout edge to add
+	 * @throws IllegalArgumentException if the edge does not belong to the associated graph 
+	 */
+	public void addLayoutEdge(GraphLayoutEdge edge) {
+		
+		if (edge.getIndex() < 0 || edge.getIndex() > graph.getMaxEdgeIndex() || edge.getBaseEdge().getGraph() != graph) {
+			throw new IllegalArgumentException();
+		}
+		
+		addLayoutEdgeFast(edge);
+	}
+	
+	
+	/**
 	 * Set the margin
 	 * 
 	 * @param margin the new margin
@@ -437,10 +479,10 @@ public abstract class GraphLayout implements Serializable {
 				}
 				
 				int d = a[2].length() == 0 ? 1 : 0;
-				double x = Double.parseDouble(a[2 + d]) * Graphviz.IMPORT_SCALE;
-				double y = Double.parseDouble(a[3 + d]) * Graphviz.IMPORT_SCALE;
-				double w = Double.parseDouble(a[4 + d]) * Graphviz.IMPORT_SCALE;
-				double h = Double.parseDouble(a[5 + d]) * Graphviz.IMPORT_SCALE;
+				double x =  Double.parseDouble(a[2 + d]) * Graphviz.IMPORT_SCALE;
+				double y = -Double.parseDouble(a[3 + d]) * Graphviz.IMPORT_SCALE;
+				double w =  Double.parseDouble(a[4 + d]) * Graphviz.IMPORT_SCALE;
+				double h =  Double.parseDouble(a[5 + d]) * Graphviz.IMPORT_SCALE;
 				
 				if (x < xMin) xMin = x;
 				if (x > xMax) xMax = x;
@@ -482,8 +524,8 @@ public abstract class GraphLayout implements Serializable {
 					int k = 4;
 
 					for (int i = 1; i <= num; i++) {
-						double dx = Double.parseDouble(a[k++]);
-						double dy = Double.parseDouble(a[k++]);
+						double dx =  Double.parseDouble(a[k++]);
+						double dy = -Double.parseDouble(a[k++]);
 						x[i] = dx * Graphviz.IMPORT_SCALE;
 						y[i] = dy * Graphviz.IMPORT_SCALE;
 					}

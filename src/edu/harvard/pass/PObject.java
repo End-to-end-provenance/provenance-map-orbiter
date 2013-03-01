@@ -65,7 +65,30 @@ public class PObject implements Comparable<PObject>, java.io.Serializable {
 	 * Node type
 	 */
 	public enum Type {
-		PROCESS, ARTIFACT, AGENT, OTHER
+		PROCESS {
+			@Override
+			public String toString() {
+				return "PROCESS";
+			}
+		},
+		ARTIFACT {
+			@Override
+			public String toString() {
+				return "ARTIFACT";
+			}
+		},
+		AGENT {
+			@Override
+			public String toString() {
+				return "AGENT";
+			}
+		},
+		OTHER {
+			@Override
+			public String toString() {
+				return "OTHER";
+			}
+		}
 	}
 	
 	
@@ -185,9 +208,12 @@ public class PObject implements Comparable<PObject>, java.io.Serializable {
 		shortName = name;
 		if (shortName == null) shortName = "";
 		
-		int slash = shortName.lastIndexOf('/');
-		if (slash >= 0) {
-			shortName = shortName.substring(slash + 1);
+		if (extType != null && (extType.toUpperCase().endsWith("_FILE")
+				|| extType.equalsIgnoreCase("FILE") || extType.equalsIgnoreCase("PROC"))) {
+			int slash = shortName.lastIndexOf('/');
+			if (slash >= 0) {
+				shortName = shortName.substring(slash + 1);
+			}
 		}
 		
 		for (PNode n : versions) {
@@ -248,6 +274,7 @@ public class PObject implements Comparable<PObject>, java.io.Serializable {
 	public void setType(Type type, String extType) {
 		this.type = type;
 		this.extType = extType;
+		if (name != null) setName(name);
 	}
 	
 	
@@ -394,6 +421,19 @@ public class PObject implements Comparable<PObject>, java.io.Serializable {
 	public double getFirstFreezeTime() {
 		for (PNode n : versions) {
 			if (n != null) return n.getFreezeTime();
+		}
+		return 0;
+	}
+	
+	
+	/**
+	 * Return the first time
+	 * 
+	 * @return the time of the first available version
+	 */
+	public double getFirstTime() {
+		for (PNode n : versions) {
+			if (n != null) return n.getTime();
 		}
 		return 0;
 	}

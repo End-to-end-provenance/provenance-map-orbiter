@@ -67,7 +67,7 @@ import edu.harvard.util.gui.*;
  */
 public class RDFParser implements Parser, HasWizardPanelConfigGUI {
 	
-	private static final String DEFAULT_URI = "file://local/";
+	public static final String DEFAULT_URI = "file://local/";
 	private int numStatements;
 	
 	private RDFAnalyzer analyzer;

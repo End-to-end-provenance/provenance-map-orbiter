@@ -32,7 +32,10 @@
 package edu.harvard.util.graph;
 
 import java.io.*;
+import java.lang.ref.WeakReference;
 import java.util.*;
+
+import org.jgrapht.EdgeFactory;
 
 import edu.harvard.util.graph.layout.*;
 import edu.harvard.util.Pair;
@@ -75,6 +78,11 @@ public abstract class BaseGraph implements Serializable {
 	GraphLayout defaultLayout;
 	
 	
+	// Overlays
+	
+	HashMap<String, PerNodeAttribute<?>> overlayNodeAttributes;
+	
+	
 	// Counts of nodes, edges, and summary nodes
 	
 	int numNodes;
@@ -85,6 +93,13 @@ public abstract class BaseGraph implements Serializable {
 	// State
 	
 	transient boolean summarizationActive;
+	
+	
+	// Caches
+	
+	transient JGraphTDirectedAdapter adapterJGraphT;
+	transient JGraphTInvertedAdapter adapterJGraphTInverted;
+	transient JGraphTUndirectedAdapter adapterJGraphTUndirected;
 	
 	
 	/**
@@ -116,7 +131,13 @@ public abstract class BaseGraph implements Serializable {
 		this.summarizationActive = true;
 		
 		this.layoutMap = new TreeMap<String, GraphLayout>();
-		this.defaultLayout = null;		
+		this.defaultLayout = null;
+		
+		this.overlayNodeAttributes = new HashMap<String, PerNodeAttribute<?>>();
+		
+		this.adapterJGraphT = null;
+		this.adapterJGraphTInverted = null;
+		this.adapterJGraphTUndirected = null;
 	}
 	
 	
@@ -358,6 +379,16 @@ public abstract class BaseGraph implements Serializable {
 	
 	
 	/**
+	 * Get the largest node index for the underlying (i.e. non-summary nodes)
+	 * 
+	 * @return the largest node index
+	 */
+	public int getMaxNodeIndexBase() {
+		return numNodes - 1;
+	}
+	
+	
+	/**
 	 * Get the largest edge index
 	 * 
 	 * @return the largest edge index
@@ -397,8 +428,11 @@ public abstract class BaseGraph implements Serializable {
 		if (index < numNodes) {
 			return nodes.get(index);
 		}
-		else {
+		else if (index < numNodes + summaryNodes.size()) {
 			return summaryNodes.get(index - numNodes);
+		}
+		else {
+			return null;
 		}
 	}
 	
@@ -413,8 +447,11 @@ public abstract class BaseGraph implements Serializable {
 		if (index < numEdges) {
 			return edges.get(index);
 		}
-		else {
+		else if (index < numEdges + summaryEdges.size()) {
 			return summaryEdges.get(index - numEdges);
+		}
+		else {
+			return null;
 		}
 	}
 	
@@ -566,6 +603,105 @@ public abstract class BaseGraph implements Serializable {
 	
 	
 	/**
+	 * Find all actual (not summary) edges between two (potentially summary) nodes.
+	 * Note that the edges are not traversed transitively
+	 * 
+	 * @param from the from node
+	 * @param to the to node
+	 * @return the set of all such base edges
+	 */
+	public Set<BaseEdge> getAllBaseEdgesAsSet(BaseNode from, BaseNode to) {
+		
+		Collection<BaseEdge> c = getAllBaseEdges(from, to);
+		if (c instanceof Set<?>) return (Set<BaseEdge>) c;
+		
+		HashSet<BaseEdge> set = new HashSet<BaseEdge>();
+		for (BaseEdge e : c) set.add(e);
+		
+		return set;
+	}
+	
+	
+	/**
+	 * Determine if this graph is a tree and if so, find the root
+	 * 
+	 * @return the tree root, or null if not a tree
+	 */
+	public BaseNode findBaseTreeRoot() {
+		
+		if (nodes.isEmpty()) return null;
+		if (nodes.size() != edges.size() + 1) return null; 
+		
+		for (boolean dirOutgoing : new boolean[] { true, false }) {
+			
+			// Find a candidate root
+			
+			boolean forceFail = false;			
+			BaseNode root = null;
+			
+			for (BaseNode n : nodes) {
+				if ((dirOutgoing ? n.getOutgoingBaseEdges() : n.getIncomingBaseEdges()).isEmpty()) {
+					if (root == null) {
+						root = n;
+					}
+					else {
+						forceFail = true;
+						break;
+					}
+				}
+			}
+			
+			if (forceFail) continue;
+			
+			
+			// Check the tree structure
+			
+			HashSet<BaseNode> visited = new HashSet<BaseNode>();
+			Stack<BaseNode> stack = new Stack<BaseNode>();
+			
+			visited.add(root);
+			stack.push(root);
+			
+			while (!stack.isEmpty()) {
+				BaseNode n = stack.pop();
+				Collection<BaseEdge> edges =  dirOutgoing ? n.getOutgoingBaseEdges() : n.getIncomingBaseEdges();
+				
+				for (BaseEdge e : edges) {
+					BaseNode other = e.getBaseOther(n);
+					if (visited.contains(other)) {
+						forceFail = true;
+						break;
+					}
+					else {
+						visited.add(other);
+						
+						Collection<BaseEdge> parents = !dirOutgoing
+								? other.getOutgoingBaseEdges() : other.getIncomingBaseEdges();
+						if (parents.size() != 1) {
+							forceFail = true;
+							break;
+						}
+						
+						if (n != parents.iterator().next().getBaseOther(other)) {
+							forceFail = true;
+							break;
+						}
+					}
+				}
+				
+				if (forceFail) break;
+			}
+			
+			if (forceFail) continue;
+			
+			return root;
+		}
+		
+		return null;
+	}
+	
+	
+	/**
 	 * Add a graph layout to the base graph structure
 	 * 
 	 * @param layout the layout
@@ -658,5 +794,378 @@ public abstract class BaseGraph implements Serializable {
 		PrintStream out = new PrintStream(file);
 		dumpGraphviz(out, title, directed);
 		out.close();
+	}
+	
+	
+	/**
+	 * Add or update a per-node attribute overlay
+	 * 
+	 * @param overlay the overlay
+	 */
+	public void addPerNodeAttributeOverlay(PerNodeAttribute<?> overlay) {
+		overlayNodeAttributes.put(overlay.getName(), overlay);
+	}
+	
+	
+	/**
+	 * Get the map of all per-node attribute overlays
+	 * 
+	 * @return the map of names to overlays
+	 */
+	public Map<String, PerNodeAttribute<?>> getPerNodeAttributeOverlayMap() {
+		return overlayNodeAttributes;
+	}
+	
+	
+	/**
+	 * Get a specific per-node attribute overlay
+	 * 
+	 * @param name the overlay/attribute name
+	 * @return the overlay, or null if not there
+	 */
+	public PerNodeAttribute<?> getPerNodeAttributeOverlay(String name) {
+		return overlayNodeAttributes.get(name);
+	}
+
+	
+	/**
+	 * Get the JGraphT adapter for BaseGraph
+	 * 
+	 * @return the adapter
+	 */
+	public synchronized org.jgrapht.DirectedGraph<BaseNode, BaseEdge> getBaseJGraphTAdapter() {
+		if (adapterJGraphT == null) {
+			adapterJGraphT = new JGraphTDirectedAdapter();
+		}
+		return adapterJGraphT;
+	}
+
+	
+	/**
+	 * Get the JGraphT adapter for BaseGraph
+	 * 
+	 * @param direction the graph direction
+	 * @return the adapter
+	 */
+	public synchronized org.jgrapht.Graph<BaseNode, BaseEdge> getBaseJGraphTAdapter(GraphDirection direction) {
+		switch (direction) {
+		case DIRECTED: return getBaseJGraphTAdapter();
+		case UNDIRECTED: return getBaseJGraphTUndirectedAdapter();
+		case INVERTED: return getBaseJGraphTInvertedAdapter();
+		default: throw new IllegalArgumentException();
+		}
+	}
+
+	
+	/**
+	 * Get the JGraphT adapter for a variant of BaseGraph with inverted edges
+	 * 
+	 * @return the adapter
+	 */
+	public synchronized org.jgrapht.DirectedGraph<BaseNode, BaseEdge> getBaseJGraphTInvertedAdapter() {
+		if (adapterJGraphTInverted == null) {
+			adapterJGraphTInverted = new JGraphTInvertedAdapter();
+		}
+		return adapterJGraphTInverted;
+	}
+
+	
+	/**
+	 * Get the JGraphT adapter for the undirected version of BaseGraph
+	 * 
+	 * @return the adapter
+	 */
+	public synchronized org.jgrapht.Graph<BaseNode, BaseEdge> getBaseJGraphTUndirectedAdapter() {
+		if (adapterJGraphTUndirected == null) {
+			adapterJGraphTUndirected = new JGraphTUndirectedAdapter();
+		}
+		return adapterJGraphTUndirected;
+	}
+	
+	
+	/**
+	 * The JGraphT adapter for an undirected BaseGraph
+	 */
+	protected class JGraphTUndirectedAdapter implements org.jgrapht.Graph<BaseNode, BaseEdge> {
+		
+		protected WeakHashMap<BaseNode, WeakReference<Set<BaseEdge>>> bothEdgesCache;
+		
+		protected WeakReference<Set<BaseNode>> allNodesCache;
+		protected WeakReference<Set<BaseEdge>> allEdgesCache;
+		
+		protected boolean directed = false;
+		
+		public JGraphTUndirectedAdapter() {
+			bothEdgesCache = new WeakHashMap<BaseNode, WeakReference<Set<BaseEdge>>>();
+			allNodesCache = new WeakReference<Set<BaseNode>>(null);
+			allEdgesCache = new WeakReference<Set<BaseEdge>>(null);
+		}
+		
+
+		@Override
+		public BaseEdge addEdge(BaseNode from, BaseNode to) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public boolean addEdge(BaseNode from, BaseNode to, BaseEdge edge) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public boolean addVertex(BaseNode node) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public boolean containsEdge(BaseEdge edge) {
+			return edge.getGraph() == BaseGraph.this;
+		}
+
+		@Override
+		public boolean containsEdge(BaseNode from, BaseNode to) {
+			if (getBaseEdgeExt(from, to) != null) return true;
+			if (!directed) if (getBaseEdgeExt(to, from) != null) return true;
+			return false;
+		}
+
+		@Override
+		public boolean containsVertex(BaseNode node) {
+			return node.getGraph() == BaseGraph.this;
+		}
+
+		@Override
+		public synchronized Set<BaseEdge> edgeSet() {
+			Set<BaseEdge> set = allEdgesCache.get();
+			if (set == null || set.size() != edges.size()) {
+				if (set == null) set = new HashSet<BaseEdge>();
+				for (BaseEdge e : edges) set.add(e);
+				allEdgesCache = new WeakReference<Set<BaseEdge>>(set);
+			}
+			return set;
+		}
+
+		@Override
+		public synchronized Set<BaseEdge> edgesOf(BaseNode node) {
+			List<BaseEdge> l1 = node.getIncomingBaseEdges();
+			List<BaseEdge> l2 = node.getOutgoingBaseEdges();
+			WeakReference<Set<BaseEdge>> w = bothEdgesCache.get(node);;
+			Set<BaseEdge> set = w == null ? null : w.get();
+			// Note: This condition does not handle self-loops
+			if (set == null || set.size() != l1.size() + l2.size()) {
+				if (set == null) set = new HashSet<BaseEdge>();
+				for (BaseEdge e : l1) set.add(e);
+				for (BaseEdge e : l2) set.add(e);
+				bothEdgesCache.put(node, new WeakReference<Set<BaseEdge>>(set));
+			}
+			return set;
+		}
+
+		@Override
+		public Set<BaseEdge> getAllEdges(BaseNode from, BaseNode to) {
+			Set<BaseEdge> e = getAllBaseEdgesAsSet(from, to);
+			if (!directed) {
+				Set<BaseEdge> x = getAllBaseEdgesAsSet(to, from);
+				if (e == null) e = new HashSet<BaseEdge>();
+				for (BaseEdge edge : x) e.add(edge);
+			}
+			return e;
+		}
+
+		@Override
+		public BaseEdge getEdge(BaseNode from, BaseNode to) {
+			BaseEdge e = getBaseEdgeExt(from, to);
+			if (e == null && !directed) {
+				e = getBaseEdgeExt(to, from);
+			}
+			return e;
+		}
+
+		@Override
+		public EdgeFactory<BaseNode, BaseEdge> getEdgeFactory() {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public BaseNode getEdgeSource(BaseEdge e) {
+			return e.getBaseFrom();
+		}
+
+		@Override
+		public BaseNode getEdgeTarget(BaseEdge e) {
+			return e.getBaseTo();
+		}
+
+		@Override
+		public double getEdgeWeight(BaseEdge e) {
+			return 1;
+		}
+
+		@Override
+		public boolean removeAllEdges(Collection<? extends BaseEdge> edges) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public Set<BaseEdge> removeAllEdges(BaseNode from, BaseNode to) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public boolean removeAllVertices(Collection<? extends BaseNode> nodes) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public boolean removeEdge(BaseEdge edge) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public BaseEdge removeEdge(BaseNode from, BaseNode to) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public boolean removeVertex(BaseNode node) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public synchronized Set<BaseNode> vertexSet() {
+			Set<BaseNode> set = allNodesCache.get();
+			if (set == null || set.size() != nodes.size()) {
+				if (set == null) set = new HashSet<BaseNode>();
+				for (BaseNode n : nodes) set.add(n);
+				allNodesCache = new WeakReference<Set<BaseNode>>(set);
+			}
+			return set;
+		}
+	}
+	
+	
+	/**
+	 * The JGraphT adapter for a directed BaseGraph
+	 */
+	protected class JGraphTDirectedAdapter extends JGraphTUndirectedAdapter
+		implements org.jgrapht.DirectedGraph<BaseNode, BaseEdge> {
+		
+		protected WeakHashMap<BaseNode, WeakReference<Set<BaseEdge>>> incomingEdgesCache;
+		protected WeakHashMap<BaseNode, WeakReference<Set<BaseEdge>>> outgoingEdgesCache;
+		
+		public JGraphTDirectedAdapter() {
+			incomingEdgesCache = new WeakHashMap<BaseNode, WeakReference<Set<BaseEdge>>>();
+			outgoingEdgesCache = new WeakHashMap<BaseNode, WeakReference<Set<BaseEdge>>>();
+			directed = true;
+		}
+
+		@Override
+		public int inDegreeOf(BaseNode node) {
+			return node.getIncomingBaseEdges().size();
+		}
+
+		@Override
+		public synchronized Set<BaseEdge> incomingEdgesOf(BaseNode node) {
+			List<BaseEdge> l = node.getIncomingBaseEdges();
+			WeakReference<Set<BaseEdge>> w = incomingEdgesCache.get(node);;
+			Set<BaseEdge> set = w == null ? null : w.get();
+			if (set == null || set.size() != l.size()) {
+				if (set == null) set = new HashSet<BaseEdge>();
+				for (BaseEdge e : l) set.add(e);
+				incomingEdgesCache.put(node, new WeakReference<Set<BaseEdge>>(set));
+			}
+			return set;
+		}
+
+		@Override
+		public int outDegreeOf(BaseNode node) {
+			return node.getOutgoingBaseEdges().size();
+		}
+
+		@Override
+		public synchronized Set<BaseEdge> outgoingEdgesOf(BaseNode node) {
+			List<BaseEdge> l = node.getOutgoingBaseEdges();
+			WeakReference<Set<BaseEdge>> w = outgoingEdgesCache.get(node);;
+			Set<BaseEdge> set = w == null ? null : w.get();
+			if (set == null || set.size() != l.size()) {
+				if (set == null) set = new HashSet<BaseEdge>();
+				for (BaseEdge e : l) set.add(e);
+				outgoingEdgesCache.put(node, new WeakReference<Set<BaseEdge>>(set));
+			}
+			return set;
+		}
+	}
+	
+	
+	/**
+	 * The JGraphT adapter for a directed BaseGraph with inverted edges
+	 */
+	protected class JGraphTInvertedAdapter extends JGraphTUndirectedAdapter
+		implements org.jgrapht.DirectedGraph<BaseNode, BaseEdge> {
+		
+		protected WeakHashMap<BaseNode, WeakReference<Set<BaseEdge>>> incomingEdgesCache;
+		protected WeakHashMap<BaseNode, WeakReference<Set<BaseEdge>>> outgoingEdgesCache;
+		
+		public JGraphTInvertedAdapter() {
+			incomingEdgesCache = new WeakHashMap<BaseNode, WeakReference<Set<BaseEdge>>>();
+			outgoingEdgesCache = new WeakHashMap<BaseNode, WeakReference<Set<BaseEdge>>>();
+			directed = true;
+		}
+
+		@Override
+		public boolean containsEdge(BaseNode from, BaseNode to) {
+			return getBaseEdgeExt(to, from) != null;
+		}
+
+		@Override
+		public BaseEdge getEdge(BaseNode from, BaseNode to) {
+			return getBaseEdgeExt(to, from);
+		}
+
+		@Override
+		public BaseNode getEdgeSource(BaseEdge e) {
+			return e.getBaseTo();
+		}
+
+		@Override
+		public BaseNode getEdgeTarget(BaseEdge e) {
+			return e.getBaseFrom();
+		}
+
+		@Override
+		public int inDegreeOf(BaseNode node) {
+			return node.getOutgoingBaseEdges().size();
+		}
+
+		@Override
+		public synchronized Set<BaseEdge> incomingEdgesOf(BaseNode node) {
+			List<BaseEdge> l = node.getOutgoingBaseEdges();
+			WeakReference<Set<BaseEdge>> w = outgoingEdgesCache.get(node);;
+			Set<BaseEdge> set = w == null ? null : w.get();
+			if (set == null || set.size() != l.size()) {
+				if (set == null) set = new HashSet<BaseEdge>();
+				for (BaseEdge e : l) set.add(e);
+				outgoingEdgesCache.put(node, new WeakReference<Set<BaseEdge>>(set));
+			}
+			return set;
+		}
+
+		@Override
+		public int outDegreeOf(BaseNode node) {
+			return node.getIncomingBaseEdges().size();
+		}
+
+		@Override
+		public synchronized Set<BaseEdge> outgoingEdgesOf(BaseNode node) {
+			List<BaseEdge> l = node.getIncomingBaseEdges();
+			WeakReference<Set<BaseEdge>> w = incomingEdgesCache.get(node);;
+			Set<BaseEdge> set = w == null ? null : w.get();
+			if (set == null || set.size() != l.size()) {
+				if (set == null) set = new HashSet<BaseEdge>();
+				for (BaseEdge e : l) set.add(e);
+				incomingEdgesCache.put(node, new WeakReference<Set<BaseEdge>>(set));
+			}
+			return set;
+		}
 	}
 }

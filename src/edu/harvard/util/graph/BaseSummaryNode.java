@@ -34,10 +34,10 @@ package edu.harvard.util.graph;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
 
 import edu.harvard.util.Pair;
 import edu.harvard.util.Utils;
@@ -52,9 +52,9 @@ public class BaseSummaryNode extends BaseNode implements java.io.Serializable {
 
 	private static final long serialVersionUID = -3453113606393905635L;
 	
-	HashSet<BaseNode> children;
+	List<BaseNode> children;
 	
-	HashSet<BaseEdge> internalEdges;
+	List<BaseEdge> internalEdges;
 	HashMap<Pair<BaseNode, BaseNode>, BaseEdge> internalEdgesMap;
 	
 	
@@ -279,7 +279,7 @@ public class BaseSummaryNode extends BaseNode implements java.io.Serializable {
 	 * 
 	 * @return the set of children
 	 */
-	public Set<BaseNode> getBaseChildren() {
+	public List<BaseNode> getBaseChildren() {
 		return children == null ? NO_NODES : children;
 	}
 	
@@ -296,7 +296,7 @@ public class BaseSummaryNode extends BaseNode implements java.io.Serializable {
 			throw new IllegalStateException("Trying to make a summary node while summarization is not in progress");
 		}
 		
-		if (children == null) children = new HashSet<BaseNode>();
+		if (children == null) children = new ArrayList<BaseNode>();
 		
 		child.parent = Utils.<BaseSummaryNode>cast(this);
 		children.add(child);
@@ -368,7 +368,7 @@ public class BaseSummaryNode extends BaseNode implements java.io.Serializable {
 	 * Get the internal edges between the immediate children of this node.
 	 * If the set has not been computed yet, it will be computed and memoized.
 	 */
-	public Set<BaseEdge> getInternalEdges() {
+	public List<BaseEdge> getInternalEdges() {
 		
 		if (children == null) return NO_EDGES;
 		if (internalEdges != null) return internalEdges;
@@ -376,7 +376,7 @@ public class BaseSummaryNode extends BaseNode implements java.io.Serializable {
 		
 		// Compute the set
 		
-		internalEdges = new HashSet<BaseEdge>();
+		internalEdges = new ArrayList<BaseEdge>();
 		internalEdgesMap = new HashMap<Pair<BaseNode, BaseNode>, BaseEdge>();
 		
 		for (BaseNode n : children) {

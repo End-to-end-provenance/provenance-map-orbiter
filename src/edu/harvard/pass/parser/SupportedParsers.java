@@ -57,6 +57,8 @@ public class SupportedParsers {
 		
 		parsers = new Vector<Parser>();
 		parsers.add(new TwigParser());
+		parsers.add(new DDGParser());
+		parsers.add(new PhyloXMLParser());
 		parsers.add(new RDFParser());
 		parsers.add(new OPMParser());
 		parsers.add(new CPLParser());

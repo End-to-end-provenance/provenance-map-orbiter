@@ -33,6 +33,7 @@ package edu.harvard.pass.orbiter.gui;
 
 import edu.harvard.pass.orbiter.document.*;
 
+import edu.harvard.pass.algorithm.NullSummarizer;
 import edu.harvard.pass.algorithm.ProcessTreeSummarizer;
 import edu.harvard.pass.filter.*;
 import edu.harvard.pass.*;
@@ -51,9 +52,12 @@ import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.*;
+import java.util.List;
 
 import javax.swing.*;
 import javax.swing.event.*;
+
+import org.jgrapht.alg.CycleDetector;
 
 
 /**
@@ -80,7 +84,7 @@ public class MainFrame extends JFrame implements Runnable {
 	private PASSDecorator decorator;
 	
 	private JTabbedPane rightTabbedPane;
-	private FilterListPanel<PNode> filterPanel;
+	private NodeFilterPanel filterPanel;
 	private SearchPanel searchPanel;
 	private LegendPanel legendPanel;
 	
@@ -99,7 +103,9 @@ public class MainFrame extends JFrame implements Runnable {
 	private JMenuItem fileOpenMenuItem;
 	private JMenuItem fileOpenCPLMenuItem;
 	private JMenuItem fileSaveMenuItem;
-	private JMenuItem fileExportImageMenuItem;
+	private JMenuItem fileExportMenuItem;
+	private JMenuItem fileScreenshotMenuItem;
+	private JMenuItem fileExportGraphvizMenuItem;
 	private JMenuItem fileExportNodeCSVMenuItem;
 	private JMenuItem fileQuitMenuItem;
 	
@@ -108,8 +114,14 @@ public class MainFrame extends JFrame implements Runnable {
 	private JMenuItem transformProcessGraphMenuItem;
 	private JMenuItem transformCollapseGraphMenuItem;
 	private JMenuItem transformApplyFilterMenuItem;
+	private JMenuItem transformApplyNoSummarizeFilterMenuItem;
 	private JMenuItem transformHierarchicalLayoutMenuItem;
 	private JMenuItem transformSpringLayoutMenuItem;
+	
+	private JMenu lineageQueryMenu;
+	private JMenuItem lineageQueryAncestorsMenuItem;
+	private JMenuItem lineageQueryDescendantsMenuItem;
+	private JMenuItem lineageQueryExportShortestPathCSVMenuItem;
 	
 	private JMenu viewMenu;
 	private JCheckBoxMenuItem viewDrawArrowsItem;
@@ -118,6 +130,16 @@ public class MainFrame extends JFrame implements Runnable {
 	private JMenuItem viewFullscreenMenuItem;
 	
 	private JMenu graphDerivationTreeMenu;
+	
+	private JMenu comparisonMenu;
+	private JMenuItem comparisonSet1Item;
+	private JMenuItem comparisonSet2Item;
+	private JMenuItem comparisonViewItem;
+	private JMenuItem comparisonDifferenceItem;
+	
+	private JMenu toolsMenu;
+	private JMenuItem toolsRecomputeProvRankItem;
+	private JMenuItem toolsDetectCyclesItem;
 
 	
 	/**
@@ -162,13 +184,11 @@ public class MainFrame extends JFrame implements Runnable {
 		
 		
 		// Create the filters
-
-		FilterSet<PNode> f = new FilterSet<PNode>(true);
-		display.addFilter(f);
 		
 		filterFactory = new SupportedFilters();
-		filterPanel = new FilterListPanel<PNode>(null, f, filterFactory);
+		filterPanel = new NodeFilterPanel(null, filterFactory);
 		if (mac) filterPanel.setOpaque(false);
+		display.addFilter(filterPanel.getNodeFilter());
 		
 		rightTabbedPane.addTab("Filter", null, filterPanel);
 		
@@ -239,7 +259,7 @@ public class MainFrame extends JFrame implements Runnable {
 		
 		displaySplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, display, rightTabbedPane);
 		displaySplitPane.setOneTouchExpandable(true);
-		displaySplitPane.setDividerLocation(-200);
+		displaySplitPane.setDividerLocation(-250);
 		displaySplitPane.setResizeWeight(1.0);
 		
 		mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, displaySplitPane, bottomTabbedPane);
@@ -257,32 +277,43 @@ public class MainFrame extends JFrame implements Runnable {
 		fileMenu = new JMenu("File");
 		mainMenu.add(fileMenu);
 
-		fileOpenMenuItem = new JMenuItem("Open", KeyEvent.VK_O);
+		fileOpenMenuItem = new JMenuItem("Open...", KeyEvent.VK_O);
 		fileOpenMenuItem.addActionListener(handler);
 		fileOpenMenuItem.setAccelerator(Utils.getKeyStrokeForMenu(KeyEvent.VK_O));
 		fileMenu.add(fileOpenMenuItem);
 
-		fileOpenCPLMenuItem = new JMenuItem("Open CPL Object", KeyEvent.VK_L);
+		fileOpenCPLMenuItem = new JMenuItem("Open CPL Object...", KeyEvent.VK_L);
 		fileOpenCPLMenuItem.addActionListener(handler);
 		fileOpenCPLMenuItem.setAccelerator(Utils.getKeyStrokeForMenu(KeyEvent.VK_L));
 		fileOpenCPLMenuItem.setEnabled(edu.harvard.pass.cpl.CPL.isInstalled());
 		fileMenu.add(fileOpenCPLMenuItem);
 
-		fileSaveMenuItem = new JMenuItem("Save", KeyEvent.VK_S);
+		fileSaveMenuItem = new JMenuItem("Save...", KeyEvent.VK_S);
 		fileSaveMenuItem.addActionListener(handler);
 		fileSaveMenuItem.setAccelerator(Utils.getKeyStrokeForMenu(KeyEvent.VK_S));
 		fileMenu.add(fileSaveMenuItem);
 
 		fileMenu.addSeparator();
 		
-		fileExportImageMenuItem = new JMenuItem("Export Image", KeyEvent.VK_E);
-		fileExportImageMenuItem.addActionListener(handler);
-		fileExportImageMenuItem.setAccelerator(Utils.getKeyStrokeForMenu(KeyEvent.VK_E));
-		fileMenu.add(fileExportImageMenuItem);
+		fileExportMenuItem = new JMenuItem("Export...", KeyEvent.VK_E);
+		fileExportMenuItem.addActionListener(handler);
+		fileExportMenuItem.setAccelerator(Utils.getKeyStrokeForMenu(KeyEvent.VK_E));
+		fileMenu.add(fileExportMenuItem);
 		
-		fileExportNodeCSVMenuItem = new JMenuItem("Export Nodes as CSV");
+		fileExportNodeCSVMenuItem = new JMenuItem("Export Nodes as CSV...", KeyEvent.VK_N);
 		fileExportNodeCSVMenuItem.addActionListener(handler);
 		fileMenu.add(fileExportNodeCSVMenuItem);
+
+		fileMenu.addSeparator();
+		
+		fileScreenshotMenuItem = new JMenuItem("Screenshot...", KeyEvent.VK_C);
+		fileScreenshotMenuItem.addActionListener(handler);
+		fileMenu.add(fileScreenshotMenuItem);
+		
+		fileExportGraphvizMenuItem = new JMenuItem("Export to Graphviz...", KeyEvent.VK_G);
+		fileExportGraphvizMenuItem.addActionListener(handler);
+		fileExportMenuItem.setAccelerator(Utils.getKeyStrokeForMenu(KeyEvent.VK_G));
+		fileMenu.add(fileExportGraphvizMenuItem);
 
 		fileMenu.addSeparator();
 
@@ -336,10 +367,16 @@ public class MainFrame extends JFrame implements Runnable {
 		transformCollapseGraphMenuItem = new JMenuItem("Collapse Versions");
 		transformCollapseGraphMenuItem.addActionListener(handler);
 		transformMenu.add(transformCollapseGraphMenuItem);
+
+		transformMenu.addSeparator();
 		
 		transformApplyFilterMenuItem = new JMenuItem("Apply Current Filters");
 		transformApplyFilterMenuItem.addActionListener(handler);
 		transformMenu.add(transformApplyFilterMenuItem);
+		
+		transformApplyNoSummarizeFilterMenuItem = new JMenuItem("Apply Current Filters, Skip Summarization");
+		transformApplyNoSummarizeFilterMenuItem.addActionListener(handler);
+		transformMenu.add(transformApplyNoSummarizeFilterMenuItem);
 
 		transformMenu.addSeparator();
 
@@ -357,6 +394,62 @@ public class MainFrame extends JFrame implements Runnable {
 		transformMenu.add(graphDerivationTreeMenu);
 		
 		
+		// Create the lineage query menu
+		
+		lineageQueryMenu = new JMenu("Lineage Query");
+		mainMenu.add(lineageQueryMenu);
+		
+		lineageQueryAncestorsMenuItem = new JMenuItem("Ancestors");
+		lineageQueryAncestorsMenuItem.addActionListener(handler);
+		lineageQueryMenu.add(lineageQueryAncestorsMenuItem);
+		
+		lineageQueryDescendantsMenuItem = new JMenuItem("Descendants");
+		lineageQueryDescendantsMenuItem.addActionListener(handler);
+		lineageQueryMenu.add(lineageQueryDescendantsMenuItem);
+		
+		lineageQueryMenu.addSeparator();
+		
+		lineageQueryExportShortestPathCSVMenuItem = new JMenuItem("Export Shortest Path as CSV...");
+		lineageQueryExportShortestPathCSVMenuItem.addActionListener(handler);
+		lineageQueryMenu.add(lineageQueryExportShortestPathCSVMenuItem);
+		
+		
+		// Create the comparison menu
+		
+		comparisonMenu = new JMenu("Compare");
+		mainMenu.add(comparisonMenu);
+
+		comparisonSet1Item = new JMenuItem();
+		comparisonSet1Item.addActionListener(handler);
+		comparisonMenu.add(comparisonSet1Item);
+
+		comparisonSet2Item = new JMenuItem();
+		comparisonSet2Item.addActionListener(handler);
+		comparisonMenu.add(comparisonSet2Item);
+		
+		comparisonViewItem = new JMenuItem("View Comparison");
+		comparisonViewItem.addActionListener(handler);
+		comparisonMenu.add(comparisonViewItem);
+		
+		comparisonDifferenceItem = new JMenuItem("View Difference");
+		comparisonDifferenceItem.addActionListener(handler);
+		comparisonMenu.add(comparisonDifferenceItem);
+		
+		
+		// Create the tools menu
+		
+		toolsMenu = new JMenu("Tools");
+		mainMenu.add(toolsMenu);
+
+		toolsRecomputeProvRankItem = new JMenuItem("Recompute ProvRank");
+		toolsRecomputeProvRankItem.addActionListener(handler);
+		toolsMenu.add(toolsRecomputeProvRankItem);
+		
+		toolsDetectCyclesItem = new JMenuItem("Detect Cycles");
+		toolsDetectCyclesItem.addActionListener(handler);
+		toolsMenu.add(toolsDetectCyclesItem);
+
+		
 		// Finalize the window creation
 		
 		setJMenuBar(mainMenu);
@@ -364,7 +457,6 @@ public class MainFrame extends JFrame implements Runnable {
 		pack();
 		setDocument(null);
 		Utils.centerWindow(this);
-
 	}
 	
 	
@@ -465,6 +557,8 @@ public class MainFrame extends JFrame implements Runnable {
 			
 			graphDerivationTreeMenu.removeAll();
 			
+			configureComparison();
+			
 			setTitle(TITLE);
 			return;
 		}
@@ -560,11 +654,13 @@ public class MainFrame extends JFrame implements Runnable {
 		// Compute the graph layout if necessary
 		
 		if (g.getDefaultLayout() == null) {
-			try {
-				computeGraphLayout(g, new Graphviz("dot"));
-			}
-			catch (Exception e) {
-				throw new RuntimeException(e);
+			if (!Document.HEADLESS) {
+				try {
+					computeGraphLayout(g, new Graphviz("dot"));
+				}
+				catch (Exception e) {
+					throw new RuntimeException(e);
+				}
 			}
 		}
 		
@@ -612,6 +708,9 @@ public class MainFrame extends JFrame implements Runnable {
 		// Finish
 		
 		graphLayoutChanged();
+		
+		configureGraphDisplayFilters();
+		configureComparison();
 	}
 	
 	
@@ -620,11 +719,12 @@ public class MainFrame extends JFrame implements Runnable {
 	 */
 	protected void graphLayoutChanged() {
 		
-		if (document.getPGraph() != null) {
+		if (graph != null) {
 			// Use the settings from the document graph, not the active graph
-			decorator.setPGraph(document.getPGraph());
 			filterFactory.setPGraph(document.getPGraph());
 		}
+		
+		decorator.setPGraph(graph);
 		
 		display.setGraph(graph, graph.getDefaultLayout());
 		display.setDecorator(decorator);
@@ -641,12 +741,31 @@ public class MainFrame extends JFrame implements Runnable {
 	 */
 	protected GraphLayout computeGraphLayout(PGraph g, GraphLayoutAlgorithm algorithm) throws JobException {
 		
+		return computeGraphLayout(g, algorithm, true);
+	}
+	
+	
+	/**
+	 * Compute the graph layout using a graphical job master
+	 * 
+	 * @param g the graph to recompute
+	 * @param algorithm the graph layout algorithm
+	 * @param summarize true to summarize using the default settings, false to skip it
+	 * @return the new layout
+	 */
+	protected GraphLayout computeGraphLayout(PGraph g, GraphLayoutAlgorithm algorithm, boolean summarize) throws JobException {
+		
 		Pointer<PGraph> pg = new Pointer<PGraph>(g);
 		
 		JobMasterDialog d = new JobMasterDialog(MainFrame.this, "Recomputing the Layout");
 		if (g.getRootSummaryNode() == null) {
 			try {
-				getDocument().addDefaultSummarizationJobs(g, d);
+				if (summarize) {
+					getDocument().addDefaultSummarizationJobs(g, d);
+				}
+				else {
+					d.add(new GraphSummaryJob(new NullSummarizer(), Utils.<Pointer<BaseGraph>>cast(pg)));
+				}
 			}
 			catch (Exception e) {
 				throw new JobException(e);
@@ -657,6 +776,109 @@ public class MainFrame extends JFrame implements Runnable {
 		d.run();
 		
 		return j.getResult();
+	}
+	
+	
+	/**
+	 * Configure the graph display filters
+	 */
+	protected void configureGraphDisplayFilters() {
+		
+		display.clearFilters();
+		
+		if (document == null) {
+			return;
+		}
+		
+		display.addFilter(timeFilter);
+		display.addFilter(timelineFilter);
+		display.addFilter(filterPanel.getNodeFilter());
+		
+		if (graph.getType() == PGraph.Type.LINEAGE_QUERY) {
+			filterPanel.setAncestryFilter(graph.getLineageQueryAncestryFilter());
+			display.addFilter(graph.getLineageQueryAncestryFilter());
+		}
+		else {
+			filterPanel.setAncestryFilter(null);
+		}
+	}
+	
+	
+	/**
+	 * Configure the comparison
+	 */
+	protected void configureComparison() {
+		
+		if (document == null || graph == null) {
+			
+			comparisonSet1Item.setText("Set Red: <none>");
+			comparisonSet2Item.setText("Set Blue: <none>");
+			
+			comparisonSet1Item.setEnabled(false);
+			comparisonSet2Item.setEnabled(false);
+			comparisonViewItem.setEnabled(false);
+			comparisonDifferenceItem.setEnabled(false);
+		}
+		else {
+			
+			Vector<Pair<Set<String>, String>> comparisonNodeSets = graph.getComparisonNodeSets();
+			comparisonSet1Item.setText("Set Red: " + (comparisonNodeSets.get(0) == null ? "<none>" : comparisonNodeSets.get(0).getSecond()));
+			comparisonSet2Item.setText("Set Blue: " + (comparisonNodeSets.get(1) == null ? "<none>" : comparisonNodeSets.get(1).getSecond()));
+			
+			if (graph.getType() == PGraph.Type.COMPARISON) {
+				comparisonSet1Item.setEnabled(false);
+				comparisonSet2Item.setEnabled(false);
+				comparisonViewItem.setEnabled(false);
+				comparisonDifferenceItem.setEnabled(false);
+			}
+			else {
+				boolean ready = comparisonNodeSets.get(0) != null && comparisonNodeSets.get(1) != null;
+				comparisonSet1Item.setEnabled(true);
+				comparisonSet2Item.setEnabled(true);
+				comparisonViewItem.setEnabled(ready);
+				comparisonDifferenceItem.setEnabled(ready);
+			}
+			
+			if (graph.getType() == PGraph.Type.COMPARISON) {
+				decorator.setColorNodesBy(PASSDecorator.ColorNodesBy.COMPARISON);
+			}
+			else {
+				legendPanel.resetDisplayDecorator();
+			}
+		}
+	}
+	
+	
+	/**
+	 * Get the currently selected PNode, throwing an exception if it is not
+	 * 
+	 * @return the node
+	 * @throws NoSuchElementException if not selected
+	 */
+	protected PNode getSelectedPNode() {
+		
+		if (document == null) {
+			throw new NoSuchElementException("No document is loaded");
+		}
+		
+		Set<BaseNode> selection = display.getSelectedBaseNodes();
+		if (selection.isEmpty()) {
+			throw new NoSuchElementException("No node is selected");
+		}
+		if (selection.size() > 1) {
+			throw new NoSuchElementException("More than one node is selected");
+		}
+		
+		BaseNode bn = selection.iterator().next();
+		
+		if (bn instanceof BaseSummaryNode) {
+			throw new NoSuchElementException("The selected node is a summary node, not a basic provenance node");
+		}
+		if (!(bn instanceof PNode)) {
+			throw new NoSuchElementException("The selected node is not a basic provenance node");
+		}
+		
+		return (PNode) bn;
 	}
 
 
@@ -714,6 +936,8 @@ public class MainFrame extends JFrame implements Runnable {
 			//
 
 			if (event.getSource() == fileSaveMenuItem) {
+				
+				if (document == null) return;
 
 				File file = FileChoosers.chooseDocumentFile(MainFrame.this, "Save a graph file", false);
 				if (file == null) return;
@@ -731,10 +955,35 @@ public class MainFrame extends JFrame implements Runnable {
 
 
 			//
+			// File / Export
+			//
+
+			if (event.getSource() == fileExportMenuItem) {
+				
+				if (document == null) return;
+
+				File file = FileChoosers.chooseExportFile(MainFrame.this, "Export");
+				if (file == null) return;
+				if (!Utils.checkOverwrite(MainFrame.this, file)) return;
+
+				try {
+					graph.export(file.getAbsolutePath(), null);
+				}
+				catch (Throwable e) {
+					if (!(e instanceof JobCanceledException)) e.printStackTrace();
+					JOptionPane.showMessageDialog(MainFrame.this, e.getMessage(),
+						"Failed to export", JOptionPane.ERROR_MESSAGE);
+				}
+			}
+
+
+			//
 			// File / Export Image
 			//
 
-			if (event.getSource() == fileExportImageMenuItem) {
+			if (event.getSource() == fileScreenshotMenuItem) {
+				
+				if (document == null) return;
 
 				File file = GraphicUtils.chooseImageFile(MainFrame.this, "Export an image", false);
 				if (file == null) return;
@@ -753,6 +1002,29 @@ public class MainFrame extends JFrame implements Runnable {
 						"Failed to export", JOptionPane.ERROR_MESSAGE);
 				}
 			}
+
+
+			//
+			// File / Export to Graphviz
+			//
+
+			if (event.getSource() == fileExportGraphvizMenuItem) {
+				
+				if (document == null) return;
+
+				File file = FileChoosers.chooseGraphvizFile(MainFrame.this, "Export to Graphviz", false);
+				if (file == null) return;
+				if (!Utils.checkOverwrite(MainFrame.this, file)) return;
+
+				try {
+					display.exportToGraphvizWithFormatting(file, true);
+				}
+				catch (Throwable e) {
+					if (!(e instanceof JobCanceledException)) e.printStackTrace();
+					JOptionPane.showMessageDialog(MainFrame.this, e.getMessage(),
+						"Failed to export", JOptionPane.ERROR_MESSAGE);
+				}
+			}
 			
 			
 			//
@@ -761,12 +1033,14 @@ public class MainFrame extends JFrame implements Runnable {
 			
 			if (event.getSource() == fileExportNodeCSVMenuItem) {
 				
+				if (document == null) return;
+				
 				File file = FileChoosers.chooseCSVFile(MainFrame.this, "Export nodes as a CSV", false);
 				if (file == null) return;
 				if (!Utils.checkOverwrite(MainFrame.this, file)) return;
 
 				try {
-					document.getPGraph().exportNodes(file.getAbsolutePath(), null);
+					graph.exportNodes(file.getAbsolutePath(), null);
 				}
 				catch (Throwable e) {
 					if (!(e instanceof JobCanceledException)) e.printStackTrace();
@@ -842,7 +1116,9 @@ public class MainFrame extends JFrame implements Runnable {
 				if (document == null) return;
 
 				try {
-					graph.setDefaultLayout(computeGraphLayout(graph, new Graphviz("dot")));
+					Graphviz g = new Graphviz("dot");
+					g.setRankDir("BT");
+					graph.setDefaultLayout(computeGraphLayout(graph, g));
 					graphLayoutChanged();
 				}
 				catch (Throwable e) {
@@ -886,8 +1162,8 @@ public class MainFrame extends JFrame implements Runnable {
 					filter.getAttribute().setOperator("=");
 					filter.setTypeCode(PObject.Type.ARTIFACT);
 					
-					PGraph p = graph.createSummaryGraph(filter, "File graph");
-					computeGraphLayout(p, new Graphviz("dot"));
+					PGraph p = graph.createSummaryGraph(filter, "File graph", false);
+					computeGraphLayout(p, display.getGraphLayout().getAlgorithm());
 					setGraph(p);
 				}
 				catch (Throwable e) {
@@ -911,8 +1187,8 @@ public class MainFrame extends JFrame implements Runnable {
 					filter.getAttribute().setOperator("=");
 					filter.setTypeCode(PObject.Type.PROCESS);
 					
-					PGraph p = graph.createSummaryGraph(filter, "Process graph");
-					computeGraphLayout(p, new Graphviz("dot"));
+					PGraph p = graph.createSummaryGraph(filter, "Process graph", false);
+					computeGraphLayout(p, display.getGraphLayout().getAlgorithm());
 					setGraph(p);
 				}
 				catch (Throwable e) {
@@ -933,7 +1209,7 @@ public class MainFrame extends JFrame implements Runnable {
 
 				try {
 					PGraph p = graph.createCollapsedGraph();
-					computeGraphLayout(p, new Graphviz("dot"));
+					computeGraphLayout(p, display.getGraphLayout().getAlgorithm());
 					setGraph(p);
 				}
 				catch (Throwable e) {
@@ -948,19 +1224,286 @@ public class MainFrame extends JFrame implements Runnable {
 			// Transform / Apply Filters
 			//
 			
-			if (event.getSource() == transformApplyFilterMenuItem) {
+			if (event.getSource() == transformApplyFilterMenuItem
+					|| event.getSource() == transformApplyNoSummarizeFilterMenuItem) {
 			
 				if (document == null) return;
 
 				try {
 					PGraph p = graph.createSummaryGraph(display.getFilters());
-					computeGraphLayout(p, new Graphviz("dot"));
+
+					GraphLayout l = display.getGraphLayout();
+					GraphLayoutAlgorithm la = l == null ? new Graphviz() : l.getAlgorithm();
+					computeGraphLayout(p, la, event.getSource() == transformApplyFilterMenuItem);
+					
 					setGraph(p);
 				}
 				catch (Throwable e) {
 					if (!(e instanceof JobCanceledException)) e.printStackTrace();
 					JOptionPane.showMessageDialog(MainFrame.this, e.getMessage(),
 						"Failed to recompute the layout", JOptionPane.ERROR_MESSAGE);
+				}
+			}
+			
+			
+			//
+			// Lineage Query / Ancestors or Descendants
+			//
+			
+			if (event.getSource() == lineageQueryAncestorsMenuItem
+					|| event.getSource() == lineageQueryDescendantsMenuItem) {
+
+				if (document == null) return;
+				
+				try {
+					
+					PNode node = getSelectedPNode();
+					//PNode node = graph.getObject(69194).getNode(graph.getObject(69194).getLatestVersion());//XXX paper.pdf
+					//PNode node = graph.getObject(18113).getNode(graph.getObject(18113).getLatestVersion());//XXX fftpack_lite.so
+					//PNode node = graph.getObject(45905).getNode(graph.getObject(45905).getLatestVersion());	//XXX wire-test
+					//PNode node = graph.getObject(617).getNode(graph.getObject(617).getLatestVersion());	//XXX libamu/mount_fs.c
+					//PNode node = graph.getObject(435).getNode(graph.getObject(435).getLatestVersion());	//XXX am_utils.h
+					//PNode node = graph.getObject(1).getNode(graph.getObject(1).getLatestVersion());
+					
+					AncestryFilter filter;
+					if (event.getSource() == lineageQueryAncestorsMenuItem) {
+						filter = new AncestryFilter.Ancestors(); 
+					}
+					else {
+						filter = new AncestryFilter.Descendants();
+					}
+					
+					filter.setPGraph(graph);
+					filter.setPNode(node);
+					filter.setMaxResultSize(3000);//XXX
+					
+					PGraph p = graph.lineageQuery(filter);
+					
+					System.out.println("Derived graph: " + p.getNodes().size() + " nodes, "
+							+ p.getEdges().size() + " edges");
+					
+					GraphLayout l = display.getGraphLayout();
+					GraphLayoutAlgorithm la = l == null ? new Graphviz() : l.getAlgorithm();
+					computeGraphLayout(p, la);
+					
+					setGraph(p);
+				}
+				catch (Throwable e) {
+					if (!(e instanceof JobCanceledException)) e.printStackTrace();
+					JOptionPane.showMessageDialog(MainFrame.this, e.getMessage(),
+						"Lineage Query", JOptionPane.ERROR_MESSAGE);
+				}
+			}
+			
+			
+			//
+			// Lineage Query / Export Shortest Path as CSV
+			//
+			
+			if (event.getSource() == lineageQueryExportShortestPathCSVMenuItem) {
+				
+				if (document == null) return;
+				if (graph.getType() != PGraph.Type.LINEAGE_QUERY) {
+					JOptionPane.showMessageDialog(MainFrame.this, "Not in the lineage query mode",
+							"Lineage Query", JOptionPane.ERROR_MESSAGE);
+					return;
+				}
+				
+				final File file = FileChoosers.chooseCSVFile(MainFrame.this, "Export shortest path nodes as a CSV", false);
+				if (file == null) return;
+				if (!Utils.checkOverwrite(MainFrame.this, file)) return;
+
+				try {
+					final PNode selected = getSelectedPNode();
+					
+					JobMasterDialog jd = new JobMasterDialog(MainFrame.this, "Shortest Path");
+					jd.add(new AbstractJob("Finding and Exporting Shortest Path") {
+
+						@Override
+						public void run() throws JobException {
+							
+							PNode source = graph.getLineageQueryAncestryFilter().getPNode();
+							PNode target = selected;
+							if (graph.getLineageQueryAncestryFilter() instanceof AncestryFilter.Descendants) {
+								PNode x = target; target = source; source = x;
+							}
+							
+							List<PEdge> l = source.findShortestPathTo(target);
+							if (l == null) throw new IllegalStateException("There is no such path");
+							
+							try {
+								PrintWriter out = new PrintWriter(new FileWriter(file));
+								out.println(PNode.getHeaderCSV());
+								out.println(source.toCSV());
+								for (PEdge e : l) {
+									out.println(e.getTo().toCSV());
+								}
+								out.close();
+							}
+							catch (IOException e) {
+								throw new JobException(e);
+							}
+						}
+						
+					});
+					jd.run();
+				}
+				catch (Throwable e) {
+					if (!(e instanceof JobCanceledException)) e.printStackTrace();
+					JOptionPane.showMessageDialog(MainFrame.this, e.getMessage(),
+						"Failed", JOptionPane.ERROR_MESSAGE);
+				}
+			}
+
+			
+			//
+			// Compare / Red or Blue
+			//
+			
+			if (event.getSource() == comparisonSet1Item
+					|| event.getSource() == comparisonSet2Item) {
+			
+				if (document == null) return;
+
+				try {
+					HashSet<String> set = new HashSet<String>();
+					if (display.isFilteringOnOriginals()) {
+						for (PNode n : graph.getNodes()) {
+							if (display.getFilters().accept(n.getOriginal())) {
+								set.add(n.getPublicID());
+							}
+						}
+					}
+					else {
+						for (PNode n : graph.getNodes()) {
+							if (display.getFilters().accept(n)) {
+								set.add(n.getPublicID());
+							}
+						}
+					}
+					graph.setComparisonNodeSet(event.getSource() == comparisonSet1Item ? 0 : 1,
+							set, display.getFilters().toExpressionString());
+					configureComparison();
+				}
+				catch (Throwable e) {
+					if (!(e instanceof JobCanceledException)) e.printStackTrace();
+					JOptionPane.showMessageDialog(MainFrame.this, e.getMessage(),
+						"Failed", JOptionPane.ERROR_MESSAGE);
+				}
+			}
+
+			
+			//
+			// Compare / View Comparison
+			//
+			
+			if (event.getSource() == comparisonViewItem) {
+			
+				if (document == null) return;
+
+				try {
+					PGraph p = graph.createComparison();
+					computeGraphLayout(p, display.getGraphLayout().getAlgorithm(), false);
+					setGraph(p);
+				}
+				catch (Throwable e) {
+					if (!(e instanceof JobCanceledException)) e.printStackTrace();
+					JOptionPane.showMessageDialog(MainFrame.this, e.getMessage(),
+						"Comparison Failed", JOptionPane.ERROR_MESSAGE);
+				}
+			}
+
+			
+			//
+			// Compare / View Difference
+			//
+			
+			if (event.getSource() == comparisonDifferenceItem) {
+			
+				if (document == null) return;
+
+				try {
+					PGraph p = graph.createDifference();
+					if (p.getNodes().isEmpty()) {
+						JOptionPane.showMessageDialog(MainFrame.this, "The graphs are identical",
+								"Comparison", JOptionPane.INFORMATION_MESSAGE);
+					}
+					else {
+						System.out.println("Derived graph: " + p.getNodes().size() + " nodes, "
+								+ p.getEdges().size() + " edges");
+						computeGraphLayout(p, display.getGraphLayout().getAlgorithm(), false);
+						setGraph(p);
+					}
+				}
+				catch (Throwable e) {
+					if (!(e instanceof JobCanceledException)) e.printStackTrace();
+					JOptionPane.showMessageDialog(MainFrame.this, e.getMessage(),
+						"Comparison Failed", JOptionPane.ERROR_MESSAGE);
+				}
+			}
+
+			
+			//
+			// Tools / Recompute ProvRank
+			//
+			
+			if (event.getSource() == toolsRecomputeProvRankItem) {
+			
+				if (document == null) return;
+
+				try {
+					graph.computeProvRank();
+				}
+				catch (Throwable e) {
+					if (!(e instanceof JobCanceledException)) e.printStackTrace();
+					JOptionPane.showMessageDialog(MainFrame.this, e.getMessage(),
+						"Failed to (re)compute ProvRank", JOptionPane.ERROR_MESSAGE);
+				}
+			}
+
+			
+			//
+			// Tools / Detect Cycles
+			//
+			
+			if (event.getSource() == toolsDetectCyclesItem) {
+			
+				if (document == null) return;
+
+				try {
+					final CycleDetector<BaseNode, BaseEdge> detector
+						= new CycleDetector<BaseNode, BaseEdge>(graph.getBaseJGraphTAdapter());
+					
+					@SuppressWarnings("rawtypes")
+					final Set[] cycleNodesPtr = new Set[1];
+					cycleNodesPtr[0] = null;
+					
+					JobMasterDialog j = new JobMasterDialog(null, "Detecting Cycles");
+					j.add(new AbstractJob("Detecting Cycles") {
+						@Override
+						public void run() throws JobException {
+							if (observer != null) observer.makeIndeterminate();
+							cycleNodesPtr[0] = detector.findCycles();
+						}
+					});
+					j.run();
+					
+					if (cycleNodesPtr[0] == null || cycleNodesPtr[0].isEmpty()) {
+						JOptionPane.showMessageDialog(MainFrame.this, "No cycles were detected",
+								"Cycle Detector", JOptionPane.INFORMATION_MESSAGE);
+					}
+					else {
+						display.selectNodes(Utils.<Set<BaseNode>>cast(cycleNodesPtr[0]));
+						JOptionPane.showMessageDialog(MainFrame.this, "" + cycleNodesPtr[0].size()
+								+ " node" + (cycleNodesPtr[0].size() == 1 ? "" : "s")
+								+ " participate in one or more cycles (they are now selected)",
+								"Cycle Detector", JOptionPane.WARNING_MESSAGE);
+					}
+				}
+				catch (Throwable e) {
+					if (!(e instanceof JobCanceledException)) e.printStackTrace();
+					JOptionPane.showMessageDialog(MainFrame.this, e.getMessage(),
+						"Failed while detecting cycles", JOptionPane.ERROR_MESSAGE);
 				}
 			}
 		}

@@ -58,11 +58,36 @@ public class PEdge extends Edge<PNode> implements java.io.Serializable {
 	 * Edge type
 	 */
 	public enum Type {
-		DATA,		// Data dependency
-		CONTROL,	// Control dependency
-		VERSION,	// Version edge
-		COMPOUND,	// Combination of multiple edges, possibly of different types
-		OTHER		// Other
+		DATA {		// Data dependency
+			@Override
+			public String toString() {
+				return "DATA";
+			}
+		},
+		CONTROL {	// Control dependency
+			@Override
+			public String toString() {
+				return "CONTROL";
+			}
+		},
+		VERSION {	// Version edge
+			@Override
+			public String toString() {
+				return "VERSION";
+			}
+		},
+		COMPOUND {	// Combination of multiple edges, possibly of different types
+			@Override
+			public String toString() {
+				return "COMPOUND";
+			}
+		},
+		OTHER {		// Other
+			@Override
+			public String toString() {
+				return "OTHER";
+			}
+		}
 	}
 	
 	

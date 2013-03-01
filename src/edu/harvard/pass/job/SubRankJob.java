@@ -1,7 +1,7 @@
 /*
- * A Collection of Miscellaneous Utilities
+ * Provenance Aware Storage System - Java Utilities
  *
- * Copyright 2011
+ * Copyright 2010
  *      The President and Fellows of Harvard College.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,58 +29,58 @@
  * SUCH DAMAGE.
  */
 
-package edu.harvard.util.graph.layout;
+package edu.harvard.pass.job;
 
-import edu.harvard.util.graph.*;
-import edu.harvard.util.job.JobObserver;
+import edu.harvard.pass.algorithm.SubRank;
+import edu.harvard.pass.*;
+import edu.harvard.util.job.*;
+import edu.harvard.util.*;
 
 
 /**
- * A graph layout algorithm
+ * The job to compute SubRank
  * 
  * @author Peter Macko
  */
-public interface GraphLayoutAlgorithm {
+public class SubRankJob extends AbstractJob {
+
+	private Pointer<PGraph> input;
+
 
 	/**
-	 * Initialize the graph layout for the given graph
-	 * 
-	 * @param graph the input graph
-	 * @param levels the number of levels in the hierarchy of summary nodes to precompute 
-	 * @param observer the job observer
-	 * @return the graph layout
-	 */
-	public GraphLayout initializeLayout(BaseGraph graph, int levels, JobObserver observer);
-	
-	/**
-	 * Update an existing layout by incrementally expanding the given summary node
-	 * 
-	 * @param layout the graph to update
-	 * @param node the summary node to expand
-	 * @param observer the job observer
-	 */
-	public void updateLayout(GraphLayout layout, BaseSummaryNode node, JobObserver observer);
-
-	/**
-	 * Compute the layout for the entire graph
-	 * 
-	 * @param graph the input graph
-	 * @param observer the job observer
-	 * @return the graph layout
-	 */
-	public GraphLayout computeLayout(BaseGraph graph, JobObserver observer);
-	
-	/**
-	 * Determine whether the algorithm produces zoom-based (or zoom-optimized) layouts
-	 * 
-	 * @return true if it produces zoom-optimized layouts
-	 */
-	public boolean isZoomOptimized();
-	
-	/**
-	 * Get the name of the algorithm
+	 * Constructor of class SubRankJob
 	 *
-	 * @return the name
+	 * @param input the input pointer
 	 */
-	public String getName();
+	public SubRankJob(Pointer<PGraph> input) {
+		super("Computing SubRank");
+		this.input = input;
+	}
+	
+	
+	/**
+	 * Run the job
+	 * 
+	 * @throws JobException if the job failed
+	 * @throws JobCanceledException if the job was canceled
+	 */
+	public void run() throws JobException {
+		
+
+		// Get the graph
+		
+		PGraph g = input.get();
+		if (g == null) throw new JobException("No graph");
+
+
+		// Compute SubRank
+		
+		try {
+			SubRank A = new SubRank(g);
+			A.run(observer);
+		}
+		catch (Throwable t) {
+			throw new JobException(t);
+		}
+	}
 }

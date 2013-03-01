@@ -49,6 +49,10 @@ import javax.swing.event.*;
 @SuppressWarnings("serial")
 public class FilterListPanel<T> extends JPanel {
 	
+	private static final boolean SHOW_ADD_LABEL = true;
+	private static final boolean SHOW_ADD_BUTTON = false;
+	private static final boolean QUICK_ADD = true;
+	
 	private String title;
 	
 	private FilterSet<T> filters;
@@ -60,6 +64,7 @@ public class FilterListPanel<T> extends JPanel {
 	private JScrollPane scrollPane;
 
 	private JPanel bottomPanel;
+	private JLabel addLabel;
 	private JPanel addPanel;
 	private JComboBox filterCombo;
 	private JButton addButton;
@@ -129,16 +134,22 @@ public class FilterListPanel<T> extends JPanel {
 		addPanel.setOpaque(false);
 		bottomPanel.add(addPanel);
 
-		addPanel.add(new JLabel("Add: "));
+		addLabel = null;
+		if (SHOW_ADD_LABEL) {
+			addLabel = new JLabel("Add: ");
+			addPanel.add(addLabel);
+		}
 		
 		filterCombo = new JComboBox(factory.getFilterNames().toArray());
 		filterCombo.addActionListener(handler);
 		addPanel.add(filterCombo);
 
 		addButton = null;
-		//addButton = new JButton("Add");
-		//addButton.addActionListener(handler);
-		//addPanel.add(addButton);
+		if (SHOW_ADD_BUTTON) {
+			addButton = new JButton("Add");
+			addButton.addActionListener(handler);
+			addPanel.add(addButton);
+		}
 
 
 		// The remove filter components
@@ -148,14 +159,14 @@ public class FilterListPanel<T> extends JPanel {
 		removePanel.setOpaque(false);
 		bottomPanel.add(removePanel);
 
-		removePanel.add(new JLabel("Remove: "));
+		//removePanel.add(new JLabel("Remove: "));
 		
-		removeButton = new JButton("Selected");
+		removeButton = new JButton("Remove Selected");
 		removeButton.addActionListener(handler);
 		removeButton.setEnabled(filterTable.getSelectedRowCount() > 0);
 		removePanel.add(removeButton);
 		
-		clearButton = new JButton("All");
+		clearButton = new JButton("Clear");
 		clearButton.addActionListener(handler);
 		clearButton.setEnabled(filterTable.getSelectedRowCount() > 0);
 		removePanel.add(clearButton);
@@ -171,6 +182,16 @@ public class FilterListPanel<T> extends JPanel {
 			filterTable.remove(w);
 			filters.remove(Utils.<Filter<T>>cast(w));
 		}
+	}
+	
+	
+	/**
+	 * Get the filters
+	 * 
+	 * @return the filter set
+	 */
+	public FilterSet<T> getFilters() {
+		return filters;
 	}
 
 
@@ -198,7 +219,7 @@ public class FilterListPanel<T> extends JPanel {
 			// Add a new filter
 			//
 
-			if (event.getSource() == addButton || (addButton == null && event.getSource() == filterCombo)) {
+			if (event.getSource() == addButton || ((addButton == null || QUICK_ADD) && event.getSource() == filterCombo)) {
 				try {
 
 					String name = (String) filterCombo.getSelectedItem();

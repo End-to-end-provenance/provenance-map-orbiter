@@ -56,7 +56,17 @@ public class SmallGroupsGraphSummarizer implements ObservableGraphSummarizer, Ca
 	 */
 	public SmallGroupsGraphSummarizer() {
 		nodeThreshold = 200;
-		edgeThreshold = 300;
+		edgeThreshold = 500;
+	}
+	
+	
+	/**
+	 * Get the name of the summarization algorithm
+	 * 
+	 * @return the name of the summarization algorithm
+	 */
+	public String getName() {
+		return "Random Small Groups";
 	}
 	
 	

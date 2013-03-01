@@ -56,12 +56,23 @@ public class PGraphStat implements java.io.Serializable {
 	public int depthMin;
 	public int depthMax;
 	
+	public double subRankMin;
+	public double subRankMax;
+	public double subRankJumpMin;
+	public double subRankJumpMax;
+	public double subRankLogJumpMin;
+	public double subRankLogJumpMax;
+	public double subRankMeanLogJumpMin;
+	public double subRankMeanLogJumpMax;
+	
 	public double provRankMin;
 	public double provRankMax;
 	public double provRankJumpMin;
 	public double provRankJumpMax;
 	public double provRankLogJumpMin;
 	public double provRankLogJumpMax;
+	public double provRankMeanLogJumpMin;
+	public double provRankMeanLogJumpMax;
 
 
 	/**
@@ -92,12 +103,23 @@ public class PGraphStat implements java.io.Serializable {
 		depthMin = Integer.MAX_VALUE;
 		depthMax = Integer.MIN_VALUE;
 		
+		subRankMin = Double.MAX_VALUE;
+		subRankMax = Double.MIN_VALUE;
+		subRankJumpMin = Double.MAX_VALUE;
+		subRankJumpMax = Double.MIN_VALUE;
+		subRankLogJumpMin = Double.MAX_VALUE;
+		subRankLogJumpMax = Double.MIN_VALUE;
+		subRankMeanLogJumpMin = Double.MAX_VALUE;
+		subRankMeanLogJumpMax = Double.MIN_VALUE;
+		
 		provRankMin = Double.MAX_VALUE;
 		provRankMax = Double.MIN_VALUE;
 		provRankJumpMin = Double.MAX_VALUE;
 		provRankJumpMax = Double.MIN_VALUE;
 		provRankLogJumpMin = Double.MAX_VALUE;
 		provRankLogJumpMax = Double.MIN_VALUE;
+		provRankMeanLogJumpMin = Double.MAX_VALUE;
+		provRankMeanLogJumpMax = Double.MIN_VALUE;
 	}
 
 

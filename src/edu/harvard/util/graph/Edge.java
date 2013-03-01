@@ -103,6 +103,18 @@ public class Edge<N extends BaseNode> extends BaseEdge implements Serializable {
 		return (N) to;
 	}
 	
+
+	/**
+	 * Return the other node
+	 *
+	 * @param node one of the two nodes
+	 * @return the other node
+	 */
+	@SuppressWarnings("unchecked")
+	public N getOther(N node) {
+		return (N) getBaseOther(node);
+	}
+	
 	
 	/**
 	 * Calculate the hash code

@@ -31,23 +31,23 @@
 
 package edu.harvard.util.graph;
 
-import java.io.*;
-import java.util.*;
-
 
 /**
- * An attribute to be attached to every node, but external to the Node objects
+ * A comparable attribute to be attached to every node, but external to the Node objects
  * 
  * @author Peter Macko
  * 
  * @param <T> the type of the node attribute
  */
-public class PerNodeAttribute<T> implements Serializable {
+public class PerNodeComparableAttribute<T extends Comparable<T>> extends PerNodeAttribute<T> {
 	
-	private static final long serialVersionUID = -9184650623942194434L;
+	private static final long serialVersionUID = -3148195516501847629L;
+
 	
-	private String name;
-	protected Vector<T> values;
+	// The min and max value cache
+	
+	private T min;
+	private T max;
 	
 	
 	/**
@@ -55,19 +55,10 @@ public class PerNodeAttribute<T> implements Serializable {
 	 * 
 	 * @param name the attribute name
 	 */
-	public PerNodeAttribute(String name) {
-		this.name = name;
-		this.values = new Vector<T>();
-	}
-	
-	
-	/**
-	 * Return the attribute name
-	 * 
-	 * @return the attribute name
-	 */
-	public String getName() {
-		return name; 
+	public PerNodeComparableAttribute(String name) {
+		super(name);
+		min = null;
+		max = null;
 	}
 	
 	
@@ -78,20 +69,70 @@ public class PerNodeAttribute<T> implements Serializable {
 	 * @param value the new value
 	 */
 	public void set(BaseNode node, T value) {
-		int index = node.getIndex();
-		for (int i = values.size(); i <= index; i++) values.add(null);
-		values.set(index, value);
+		
+		T old = get(node);
+		if (min == old) min = null;
+		if (max == old) max = null;
+		
+		super.set(node, value);
+		
+		if (min != null && value != null) {
+			if (min.compareTo(value) > 0) min = value;
+		}
+		if (max != null && value != null) {
+			if (max.compareTo(value) < 0) max = value;
+		}
 	}
 	
 	
 	/**
-	 * Retrieve a value for the given node
+	 * Get the minimum value
 	 * 
-	 * @param node the node
-	 * @return the value
+	 * @return the minimum value, or null if there are no values
 	 */
-	public T get(BaseNode node) {
-		if (node.getIndex() >= values.size()) return null;
-		return values.get(node.getIndex());
+	public T getMin() {
+		
+		T x = min;
+		if (x != null) return x;
+		
+		x = null;
+		for (int i = 0; i < values.size(); i++) {
+			T value = values.get(i);
+			if (x != null) {
+				if (x.compareTo(value) > 0) x = value;
+			}
+			else if (value != null) {
+				x = value;
+			}
+		}
+		
+		min = x;
+		return x;
+	}
+	
+	
+	/**
+	 * Get the maximum value
+	 * 
+	 * @return the maximum value, or null if there are no values
+	 */
+	public T getMax() {
+		
+		T x = max;
+		if (x != null) return x;
+		
+		x = null;
+		for (int i = 0; i < values.size(); i++) {
+			T value = values.get(i);
+			if (x != null) {
+				if (x.compareTo(value) < 0) x = value;
+			}
+			else if (value != null) {
+				x = value;
+			}
+		}
+		
+		max = x;
+		return x;
 	}
 }

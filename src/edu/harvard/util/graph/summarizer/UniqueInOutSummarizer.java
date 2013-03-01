@@ -29,39 +29,33 @@
  * SUCH DAMAGE.
  */
 
-package edu.harvard.pass.algorithm;
+package edu.harvard.util.graph.summarizer;
 
-import java.io.File;
 import java.util.*;
 
-import edu.harvard.pass.*;
 import edu.harvard.util.Cancelable;
-import edu.harvard.util.Utils;
 import edu.harvard.util.graph.*;
-import edu.harvard.util.graph.summarizer.*;
 import edu.harvard.util.job.JobCanceledException;
 import edu.harvard.util.job.JobObserver;
 
 
 /**
- * Summarize by file extensions
+ * Summarize using unique input/output relationships
  * 
  * @author Peter Macko
  */
-public class FileExtSummarizer implements ObservableGraphSummarizer, Cancelable {
+public class UniqueInOutSummarizer implements ObservableGraphSummarizer, Cancelable {
 
 	private boolean canceled = false;
 	
 	private int threshold;
-	private boolean mustHaveSameInputsOutputs;
 	
 	
 	/**
-	 * Create an instance of class FileExtSummarizer
+	 * Create an instance of class UniqueInOutSummarizer
 	 */
-	public FileExtSummarizer() {
+	public UniqueInOutSummarizer() {
 		this.threshold = 4;
-		this.mustHaveSameInputsOutputs = true;
 	}
 	
 	
@@ -71,7 +65,7 @@ public class FileExtSummarizer implements ObservableGraphSummarizer, Cancelable 
 	 * @return the name of the summarization algorithm
 	 */
 	public String getName() {
-		return "File Extensions";
+		return "Unique In/Out Relationships";
 	}
 
 	
@@ -92,22 +86,16 @@ public class FileExtSummarizer implements ObservableGraphSummarizer, Cancelable 
 	 * @param observer the observer
 	 */
 	public void summarize(BaseGraph graph, JobObserver observer) {
-
-		if (!(graph instanceof PGraph)) {
-			throw new IllegalArgumentException("The graph needs to be an instance of PGraph");
-		}
-		
-		PGraph g = Utils.<PGraph>cast(graph);
 	
 		canceled = false;
-		g.summarizationBegin();
+		graph.summarizationBegin();
 		
 		
 		// For every summary node that currently exists...
 		
-		PSummaryNode root = g.getRootSummaryNode();
-		Collection<PSummaryNode> summaryNodes = new HashSet<PSummaryNode>();
-		root.collectSummaryNodes(summaryNodes);
+		BaseSummaryNode root = graph.getRootBaseSummaryNode();
+		Collection<BaseSummaryNode> summaryNodes = new HashSet<BaseSummaryNode>();
+		root.collectBaseSummaryNodes(summaryNodes);
 		
 		if (observer != null) {
 			if (summaryNodes.size() > 10) {
@@ -120,7 +108,7 @@ public class FileExtSummarizer implements ObservableGraphSummarizer, Cancelable 
 		
 		int count = 0;
 		
-		for (PSummaryNode sn : summaryNodes) {
+		for (BaseSummaryNode sn : summaryNodes) {
 			
 			if (observer != null) {
 				if (summaryNodes.size() > 10) {
@@ -133,90 +121,75 @@ public class FileExtSummarizer implements ObservableGraphSummarizer, Cancelable 
 			if (canceled) throw new RuntimeException(new JobCanceledException());
 			
 			
-			// Group by the file extension
+			// Find suitable candidates for summarization
 			
-			HashMap<String, Vector<PNode>> groups = new HashMap<String, Vector<PNode>>();
+			HashMap<BaseNode, Vector<BaseNode>> candidates = new HashMap<BaseNode, Vector<BaseNode>>();
 			
 			for (BaseNode n : sn.getBaseChildren()) {
 				
 				if (n.getParent() != sn) continue;
 				if (!n.isVisible()) continue;
-				if (!(n instanceof PNode)) continue;
-				PNode node = (PNode) n;
 				
-				if (node.getObject().getType() != PObject.Type.ARTIFACT) continue;
-				if (node.getObject().getName() == null) continue;
-				File f = new File(node.getObject().getName());
+				Collection<BaseNode> incoming = n.getVisibleIncomingBaseNodes();
+				Collection<BaseNode> outgoing = n.getVisibleOutgoingBaseNodes();
 				
-				String ext = null;
-				if (ext == null) if (f.getName().indexOf(".so.") > 0) ext = "so";
-				if (ext == null) ext = Utils.getExtension(f);
-				if (ext == null) continue;
+				if (incoming.size() + outgoing.size() < threshold) continue;
 				
-				Vector<PNode> v = groups.get(ext);
-				if (v == null) {
-					v = new Vector<PNode>();
-					groups.put(ext, v);
+				Vector<BaseNode> v = new Vector<BaseNode>();
+				v.add(n);
+				
+				for (BaseNode x : incoming) {
+					if (x.getParent() != sn) continue;
+					if (x.getVisibleOutgoingBaseNodes().size() != 1) continue;
+					if (x.getVisibleIncomingBaseNodes().size() != 0) continue;
+					v.add(x);
+				}
+				for (BaseNode x : outgoing) {
+					if (x.getParent() != sn) continue;
+					if (x.getVisibleIncomingBaseNodes().size() != 1) continue;
+					if (x.getVisibleOutgoingBaseNodes().size() != 0) continue;
+					v.add(x);
 				}
 				
-				v.add(node);
+				if (v.size() >= threshold + 1 && v.size() != sn.getBaseChildren().size()) {
+					candidates.put(n, v);
+				}
 			}
 			
 			
-			// Process each group
+			while (true) {
+				
+				// Find the best candidate
+				
+				BaseNode bestCandidate = null;
+				int bestCanditateScore = 0;
 			
-			for (String ext : groups.keySet()) {
-				Vector<PNode> group = groups.get(ext);
-				
-				
-				// Break up each extension group by the inputs/outputs (if applicable)
-				
-				Vector<Vector<PNode>> subgroups = new Vector<Vector<PNode>>();
-				
-				if (mustHaveSameInputsOutputs) {
-					for (int i = 0; i < group.size(); i++) {
-						PNode n = group.get(i);
-						if (n == null) continue;
-						
-						Vector<PNode> v = new Vector<PNode>();
-						v.add(n);
-						
-						for (int j = i + 1; j < group.size(); j++) {
-							PNode m = group.get(j);
-							if (m == null) continue;
-							
-							if (!Utils.areCollectionsEqual(n.getIncomingNodes(), m.getIncomingNodes())) continue;
-							if (!Utils.areCollectionsEqual(n.getOutgoingNodes(), m.getOutgoingNodes())) continue;
-							
-							v.add(m);
-							group.set(j, null);
-						}
-						
-						subgroups.add(v);
-					}
-				}
-				else {
-					subgroups.add(group);
+				for (Map.Entry<BaseNode, Vector<BaseNode>> x : candidates.entrySet()) {
+					if (x.getValue().size() > bestCanditateScore) {
+						bestCanditateScore = x.getValue().size();
+						bestCandidate = x.getKey();
+					}					
 				}
 				
+				if (bestCandidate == null) break;
 				
-				// Make the summary nodes
 				
-				for (Vector<PNode> v : subgroups) {
-					if (v.size() < threshold) continue;
-					
-					PSummaryNode s = new PSummaryNode(sn);
-					for (PNode n : v) s.moveNodeFromAncestor(n);
-					
-					s.setLabel("*." + ext);
+				// Summarize the best candidate
+				
+				BaseSummaryNode s = graph.newSummaryNode(sn);
+				for (BaseNode n : candidates.remove(bestCandidate)) {
+					candidates.remove(n);
+					s.moveBaseNodeFromAncestor(n);
 				}
+				
+				s.setLabel(bestCandidate.getLabel());
 			}
 		}
 		
 		
 		// Finish
 		
-		g.summarizationEnd();
+		graph.summarizationEnd();
 	}
 
 	

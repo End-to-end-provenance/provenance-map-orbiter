@@ -43,8 +43,8 @@ import java.util.*;
 public class BaseNode implements Serializable, Comparable<BaseNode> {
 	
 	private static final long serialVersionUID = 3394763644050877499L;
-	static final Set<BaseNode> NO_NODES = Collections.<BaseNode>emptySet();
-	static final Set<BaseEdge> NO_EDGES = Collections.<BaseEdge>emptySet();
+	static final List<BaseNode> NO_NODES = Collections.<BaseNode>emptyList();
+	static final List<BaseEdge> NO_EDGES = Collections.<BaseEdge>emptyList();
 
 	
 	// Graph and index within the graph
@@ -60,14 +60,22 @@ public class BaseNode implements Serializable, Comparable<BaseNode> {
 	
 	// Edges
 	
-	protected HashSet<BaseEdge> incoming;
-	protected HashSet<BaseEdge> outgoing;
+	protected ArrayList<BaseEdge> incoming;
+	protected ArrayList<BaseEdge> outgoing;
+	
+	protected ArrayList<BaseNode> incomingNodes;
+	protected ArrayList<BaseNode> outgoingNodes;
 	
 	
 	// Summarization
 	
 	BaseSummaryNode parent;	// parent node (group)
 	int depth;
+	
+	
+	// Additional properties
+	
+	protected BaseNode original;
 	
 	
 	// Label & ID
@@ -97,11 +105,15 @@ public class BaseNode implements Serializable, Comparable<BaseNode> {
 		this.graph = null;
 		this.visible = true;
 		
-		this.incoming = new HashSet<BaseEdge>();
-		this.outgoing = new HashSet<BaseEdge>();
+		this.incoming = new ArrayList<BaseEdge>();
+		this.outgoing = new ArrayList<BaseEdge>();
+		this.incomingNodes = null;
+		this.outgoingNodes = null;
 		
 		this.parent = null;
 		this.depth = 0;
+		
+		this.original = null;
 		
 		this.label = "";
 	}
@@ -164,11 +176,21 @@ public class BaseNode implements Serializable, Comparable<BaseNode> {
 	
 	
 	/**
+	 * Get the original node, if this node is derived
+	 * 
+	 * @return original the original node, or this if this is the original
+	 */
+	public BaseNode getBaseOriginal() {
+		return original == null ? this : original;
+	}
+
+	
+	/**
 	 * Get a collection of incoming edges
 	 * 
 	 * @return a collection of edges
 	 */
-	public Collection<BaseEdge> getIncomingBaseEdges() {
+	public List<BaseEdge> getIncomingBaseEdges() {
 		return incoming;
 	}
 	
@@ -178,7 +200,7 @@ public class BaseNode implements Serializable, Comparable<BaseNode> {
 	 * 
 	 * @return a collection of edges
 	 */
-	public Collection<BaseEdge> getOutgoingBaseEdges() {
+	public List<BaseEdge> getOutgoingBaseEdges() {
 		return outgoing;
 	}
 	
@@ -188,10 +210,11 @@ public class BaseNode implements Serializable, Comparable<BaseNode> {
 	 * 
 	 * @return a collection of nodes
 	 */
-	public Collection<BaseNode> getIncomingBaseNodes() {
-		HashSet<BaseNode> s = new HashSet<BaseNode>();
-		for (BaseEdge e : incoming) s.add(e.getBaseFrom());
-		return s;
+	public List<BaseNode> getIncomingBaseNodes() {
+		if (incomingNodes != null && incomingNodes.size() == incoming.size()) return incomingNodes;
+		incomingNodes = new ArrayList<BaseNode>(incoming.size());
+		for (BaseEdge e : incoming) incomingNodes.add(e.getBaseFrom());
+		return incomingNodes;
 	}
 	
 	
@@ -200,9 +223,34 @@ public class BaseNode implements Serializable, Comparable<BaseNode> {
 	 * 
 	 * @return a collection of nodes
 	 */
-	public Collection<BaseNode> getOutgoingBaseNodes() {
-		HashSet<BaseNode> s = new HashSet<BaseNode>();
-		for (BaseEdge e : outgoing) s.add(e.getBaseFrom());
+	public List<BaseNode> getOutgoingBaseNodes() {
+		if (outgoingNodes != null && outgoingNodes.size() == outgoing.size()) return outgoingNodes;
+		outgoingNodes = new ArrayList<BaseNode>(outgoing.size());
+		for (BaseEdge e : outgoing) outgoingNodes.add(e.getBaseTo());
+		return outgoingNodes;
+	}
+	
+	
+	/**
+	 * Get a collection of visible endpoints of incoming edges
+	 * 
+	 * @return a collection of nodes
+	 */
+	public List<BaseNode> getVisibleIncomingBaseNodes() {
+		ArrayList<BaseNode> s = new ArrayList<BaseNode>(incoming.size());
+		for (BaseEdge e : incoming) if (e.getBaseFrom().isVisible()) s.add(e.getBaseFrom());
+		return s;
+	}
+	
+	
+	/**
+	 * Get a collection of visible endpoints of outgoing edges
+	 * 
+	 * @return a collection of nodes
+	 */
+	public List<BaseNode> getVisibleOutgoingBaseNodes() {
+		ArrayList<BaseNode> s = new ArrayList<BaseNode>(outgoing.size());
+		for (BaseEdge e : outgoing) if (e.getBaseTo().isVisible()) s.add(e.getBaseTo());
 		return s;
 	}
 

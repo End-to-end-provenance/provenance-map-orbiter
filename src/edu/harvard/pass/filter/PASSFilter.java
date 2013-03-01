@@ -56,7 +56,7 @@ public class PASSFilter {
 		 */
 		public FD() {
 			super("PNode.FD");
-			a = new Attribute<Integer>(getName(), false, 0);
+			a = new Attribute<Integer>(getName(), true, 0);
 			a.setMinimum(0);
 			a.setOperator("<=");
 			addAttribute(a);
@@ -349,6 +349,371 @@ public class PASSFilter {
 				a.setMinimum(Math.log(pass.getStat().provRankMin));
 				a.setMaximum(Math.log(pass.getStat().provRankMax));
 				a.setDefaultValue(a.getMaximum());
+			}
+			else {
+				a.setMinimum(null);
+				a.setMaximum(null);
+			}
+			fireFilterChanged();
+		}
+		
+		
+		/**
+		 * Get the string representation of the associated filter value
+		 * 
+		 * @return the string representation of the associated filter value
+		 */
+		public String getAttributeString() {
+			return defaultDecimalFormat.format(Math.exp(a.get()));
+		}
+	}
+
+
+	/**
+	 * Class ProvRankMaxLogJump
+	 */
+	public static class ProvRankMaxLogJump extends PNodeFilter {
+
+		private final DecimalFormat defaultDecimalFormat = new DecimalFormat("#.####"); 
+		private Attribute<Double> a;
+		
+
+		/**
+		 * Create an instance of class PASSFilter.ProvRankMaxLogJump
+		 */
+		public ProvRankMaxLogJump() {
+			super("ProvRankMaxLogJump");
+			a = new Attribute<Double>("Max_Delta log(ProvRank)", false, 0.0);
+			a.setOperator(">=");
+			addAttribute(a);
+		}
+
+		/**
+		 * Determine whether to accept a PASS node
+		 * 
+		 * @param node the node to be examined
+		 * @return true if the value should be accepted
+		 */
+		public boolean accept(PNode node) {
+			double max = 0;		
+			for (PEdge e : node.getIncomingEdges()) {
+				PNode from = e.getFrom();
+				double d = Math.log(node.getProvRank()) - Math.log(from.getProvRank());
+				if (d > max) max = d;
+			}
+			return a.compareLeft(max);
+		}
+		
+		/**
+		 * Set the ProvRankMaxLogJump
+		 * 
+		 * @param pr the ProvRankMaxLogJump
+		 */
+		public void setProvRankMaxLogJump(double pr) {
+			a.set(pr);
+		}
+		
+		/**
+		 * Callback for when the provenance graph has been set or changed
+		 */
+		protected void graphChanged() {
+			if (pass != null && pass.getBaseNodes().size() > 0) {
+				pass.requireProvRank();
+				a.setMinimum(pass.getStat().provRankLogJumpMin);
+				a.setMaximum(pass.getStat().provRankLogJumpMax);
+				a.setDefaultValue(a.getMinimum());
+			}
+			else {
+				a.setMinimum(null);
+				a.setMaximum(null);
+			}
+			fireFilterChanged();
+		}
+		
+		
+		/**
+		 * Get the string representation of the associated filter value
+		 * 
+		 * @return the string representation of the associated filter value
+		 */
+		public String getAttributeString() {
+			return defaultDecimalFormat.format(Math.exp(a.get()));
+		}
+	}
+
+
+	/**
+	 * Class ProvRankMeanLogJump
+	 */
+	public static class ProvRankMeanLogJump extends PNodeFilter {
+
+		private final DecimalFormat defaultDecimalFormat = new DecimalFormat("#.####"); 
+		private Attribute<Double> a;
+		
+
+		/**
+		 * Create an instance of class PASSFilter.ProvRankMeanLogJump
+		 */
+		public ProvRankMeanLogJump() {
+			super("ProvRankMeanLogJump");
+			a = new Attribute<Double>("Mean_Delta log(ProvRank)", false, 0.0);
+			a.setOperator(">=");
+			addAttribute(a);
+		}
+
+		/**
+		 * Determine whether to accept a PASS node
+		 * 
+		 * @param node the node to be examined
+		 * @return true if the value should be accepted
+		 */
+		public boolean accept(PNode node) {
+			double sum = 0;		
+			for (PEdge e : node.getIncomingEdges()) {
+				PNode from = e.getFrom();
+				sum += Math.log(node.getProvRank()) - Math.log(from.getProvRank());
+			}
+			double mean = 0;
+			if (!node.getIncomingEdges().isEmpty()) {
+				mean = sum / node.getIncomingEdges().size();
+			}
+			return a.compareLeft(mean);
+		}
+		
+		/**
+		 * Set the ProvRankMeanLogJump
+		 * 
+		 * @param pr the ProvRankMeanLogJump
+		 */
+		public void setProvRankMeanLogJump(double pr) {
+			a.set(pr);
+		}
+		
+		/**
+		 * Callback for when the provenance graph has been set or changed
+		 */
+		protected void graphChanged() {
+			if (pass != null && pass.getBaseNodes().size() > 0) {
+				pass.requireProvRank();
+				a.setMinimum(Math.min(0, pass.getStat().provRankMeanLogJumpMin));
+				a.setMaximum(pass.getStat().provRankMeanLogJumpMax);
+				a.setDefaultValue(a.getMinimum());
+			}
+			else {
+				a.setMinimum(null);
+				a.setMaximum(null);
+			}
+			fireFilterChanged();
+		}
+		
+		
+		/**
+		 * Get the string representation of the associated filter value
+		 * 
+		 * @return the string representation of the associated filter value
+		 */
+		public String getAttributeString() {
+			return defaultDecimalFormat.format(Math.exp(a.get()));
+		}
+	}
+
+
+	/**
+	 * Class SubRank
+	 */
+	public static class SubRank extends PNodeFilter {
+
+		private final DecimalFormat defaultDecimalFormat = new DecimalFormat("#.####"); 
+		private Attribute<Double> a;
+		
+
+		/**
+		 * Create an instance of class PASSFilter.SubRank
+		 */
+		public SubRank() {
+			super("SubRank");
+			a = new Attribute<Double>("log("+getName()+")", false, 0.0);
+			a.setOperator("<=");
+			addAttribute(a);
+		}
+
+		/**
+		 * Determine whether to accept a PASS node
+		 * 
+		 * @param node the node to be examined
+		 * @return true if the value should be accepted
+		 */
+		public boolean accept(PNode node) {
+			return a.compareLeft(Math.log(node.getSubRank()));
+		}
+		
+		/**
+		 * Set the SubRank
+		 * 
+		 * @param pr the SubRank
+		 */
+		public void setSubRank(double pr) {
+			a.set(pr);
+		}
+		
+		/**
+		 * Callback for when the provenance graph has been set or changed
+		 */
+		protected void graphChanged() {
+			if (pass != null && pass.getBaseNodes().size() > 0) {
+				pass.requireSubRank();
+				a.setMinimum(Math.log(pass.getStat().subRankMin));
+				a.setMaximum(Math.log(pass.getStat().subRankMax));
+				a.setDefaultValue(a.getMaximum());
+			}
+			else {
+				a.setMinimum(null);
+				a.setMaximum(null);
+			}
+			fireFilterChanged();
+		}
+		
+		
+		/**
+		 * Get the string representation of the associated filter value
+		 * 
+		 * @return the string representation of the associated filter value
+		 */
+		public String getAttributeString() {
+			return defaultDecimalFormat.format(Math.exp(a.get()));
+		}
+	}
+
+
+	/**
+	 * Class SubRankMaxLogJump
+	 */
+	public static class SubRankMaxLogJump extends PNodeFilter {
+
+		private final DecimalFormat defaultDecimalFormat = new DecimalFormat("#.####"); 
+		private Attribute<Double> a;
+		
+
+		/**
+		 * Create an instance of class PASSFilter.SubRankMaxLogJump
+		 */
+		public SubRankMaxLogJump() {
+			super("SubRankMaxLogJump");
+			a = new Attribute<Double>("Max_Delta log(SubRank)", false, 0.0);
+			a.setOperator(">=");
+			addAttribute(a);
+		}
+
+		/**
+		 * Determine whether to accept a PASS node
+		 * 
+		 * @param node the node to be examined
+		 * @return true if the value should be accepted
+		 */
+		public boolean accept(PNode node) {
+			double max = 0;		
+			for (PEdge e : node.getIncomingEdges()) {
+				PNode from = e.getFrom();
+				double d = Math.log(node.getSubRank()) - Math.log(from.getSubRank());
+				if (d > max) max = d;
+			}
+			return a.compareLeft(max);
+		}
+		
+		/**
+		 * Set the SubRankMaxLogJump
+		 * 
+		 * @param pr the SubRankMaxLogJump
+		 */
+		public void setSubRankMaxLogJump(double pr) {
+			a.set(pr);
+		}
+		
+		/**
+		 * Callback for when the provenance graph has been set or changed
+		 */
+		protected void graphChanged() {
+			if (pass != null && pass.getBaseNodes().size() > 0) {
+				pass.requireSubRank();
+				a.setMinimum(pass.getStat().subRankLogJumpMin);
+				a.setMaximum(pass.getStat().subRankLogJumpMax);
+				a.setDefaultValue(a.getMinimum());
+			}
+			else {
+				a.setMinimum(null);
+				a.setMaximum(null);
+			}
+			fireFilterChanged();
+		}
+		
+		
+		/**
+		 * Get the string representation of the associated filter value
+		 * 
+		 * @return the string representation of the associated filter value
+		 */
+		public String getAttributeString() {
+			return defaultDecimalFormat.format(Math.exp(a.get()));
+		}
+	}
+
+
+	/**
+	 * Class SubRankMeanLogJump
+	 */
+	public static class SubRankMeanLogJump extends PNodeFilter {
+
+		private final DecimalFormat defaultDecimalFormat = new DecimalFormat("#.####"); 
+		private Attribute<Double> a;
+		
+
+		/**
+		 * Create an instance of class PASSFilter.SubRankMeanLogJump
+		 */
+		public SubRankMeanLogJump() {
+			super("SubRankMeanLogJump");
+			a = new Attribute<Double>("Mean_Delta log(SubRank)", false, 0.0);
+			a.setOperator(">=");
+			addAttribute(a);
+		}
+
+		/**
+		 * Determine whether to accept a PASS node
+		 * 
+		 * @param node the node to be examined
+		 * @return true if the value should be accepted
+		 */
+		public boolean accept(PNode node) {
+			double sum = 0;		
+			for (PEdge e : node.getIncomingEdges()) {
+				PNode from = e.getFrom();
+				sum += Math.log(node.getSubRank()) - Math.log(from.getSubRank());
+			}
+			double mean = 0;
+			if (!node.getIncomingEdges().isEmpty()) {
+				mean = sum / node.getIncomingEdges().size();
+			}
+			return a.compareLeft(mean);
+		}
+		
+		/**
+		 * Set the SubRankMeanLogJump
+		 * 
+		 * @param pr the SubRankMeanLogJump
+		 */
+		public void setSubRankMeanLogJump(double pr) {
+			a.set(pr);
+		}
+		
+		/**
+		 * Callback for when the provenance graph has been set or changed
+		 */
+		protected void graphChanged() {
+			if (pass != null && pass.getBaseNodes().size() > 0) {
+				pass.requireSubRank();
+				a.setMinimum(Math.min(0, pass.getStat().subRankMeanLogJumpMin));
+				a.setMaximum(pass.getStat().subRankMeanLogJumpMax);
+				a.setDefaultValue(a.getMinimum());
 			}
 			else {
 				a.setMinimum(null);

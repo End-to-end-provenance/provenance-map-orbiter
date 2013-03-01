@@ -57,7 +57,13 @@ public class SupportedFilters extends FilterFactory<PNode> {
 		add("Type", PASSFilter.Type.class);
 		add("Time", PASSFilter.Time.class);
 		
+		add("SubRank", PASSFilter.SubRank.class);
+		add("SubRank.MaxLogJump", PASSFilter.SubRankMaxLogJump.class);
+		add("SubRank.MeanLogJump", PASSFilter.SubRankMeanLogJump.class);
+		
 		add("ProvRank", PASSFilter.ProvRank.class);
+		add("ProvRank.MaxLogJump", PASSFilter.ProvRankMaxLogJump.class);
+		add("ProvRank.MeanLogJump", PASSFilter.ProvRankMeanLogJump.class);
 		
 		add("Indegree", PASSFilter.Indegree.class);
 		add("Outdegree", PASSFilter.Outdegree.class);

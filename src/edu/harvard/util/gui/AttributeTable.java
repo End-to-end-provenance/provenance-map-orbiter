@@ -296,7 +296,7 @@ public class AttributeTable extends JTable {
 													   boolean isSelected, boolean hasFocus,
 													   int row, int column) {
 			WithAttribute edited = (WithAttribute) object;
-			AbstractAttribute attribute = edited.getAttribute();
+			AbstractAttribute attribute = edited == null ? null : edited.getAttribute();
 
 			if (isSelected) {
 				label.setForeground(table.getSelectionForeground());
@@ -309,6 +309,14 @@ public class AttributeTable extends JTable {
 				slider.setBackground(table.getBackground());
 			}
 			
+			
+			// Null attribute
+			
+			if (attribute == null) {
+				label.setText("");
+				return label;
+			}
+
 			
 			// Complex attribute
 			

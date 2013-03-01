@@ -43,6 +43,8 @@ import edu.harvard.util.job.JobObserver;
  * @author Peter Macko
  */
 public class ProvRank {
+	
+	public static final boolean SCORE_TO_SELF = false;
 
 	private PGraph graph;
 	private int iterations;
@@ -55,7 +57,7 @@ public class ProvRank {
 	 */
 	public ProvRank(PGraph graph) {
 		this.graph = graph;
-		this.iterations = 200;
+		this.iterations = 500;
 	}
 	
 	
@@ -71,7 +73,7 @@ public class ProvRank {
 		// Initialize
 		
 		Collection<PNode> nodes = graph.getNodes();
-		int N = nodes.size();
+		int N = 0; for (PNode n : nodes) if (n.isVisible()) N++;
 		if (N <= 0) return;
 		
 		if (observer != null) observer.setRange(0, iterations);
@@ -79,9 +81,15 @@ public class ProvRank {
 		
 		// Set the initial values
 		
+		
 		double initial = 1.0 / (double) N;
 		
 		for (PNode n : nodes) {
+			if (!n.isVisible()) {
+				n.setProvRank(initial);
+				n.setAux(0);
+				continue;
+			}
 			n.setProvRank(initial);
 			n.setAux(0);
 		}
@@ -99,6 +107,7 @@ public class ProvRank {
 			double X = 0;
 
 			for (PNode n : nodes) {
+				if (!n.isVisible()) continue;
 				
 				Collection<PEdge> edges = n.getOutgoingEdges();
 				int size = edges.size();
@@ -111,6 +120,9 @@ public class ProvRank {
 					for (PEdge e : edges) {
 						e.getTo().addAux(x);
 					}
+					if (SCORE_TO_SELF) {
+						n.addAux(x);
+					}
 				}
 			}
 
@@ -119,6 +131,7 @@ public class ProvRank {
 
 			double sum = 0;
 			for (PNode n : nodes) {
+				if (!n.isVisible()) continue;
 				
 				double r = X + n.getAux();
 				sum += r;
@@ -131,6 +144,7 @@ public class ProvRank {
 			// Normalize
 
 			for (PNode n : nodes) {
+				if (!n.isVisible()) continue;
 				n.setProvRank(n.getProvRank() / sum);
 			}
 		}

@@ -48,6 +48,16 @@ public class ProcessTreeSummarizer implements GraphSummarizer {
 	
 	
 	/**
+	 * Get the name of the summarization algorithm
+	 * 
+	 * @return the name of the summarization algorithm
+	 */
+	public String getName() {
+		return "Process Tree";
+	}
+
+	
+	/**
 	 * Compute the process-tree timeline
 	 * 
 	 * @param graph the graph
@@ -66,7 +76,7 @@ public class ProcessTreeSummarizer implements GraphSummarizer {
 		for (PObject o : objectMap.values()) {
 			if (o.getType() != PObject.Type.PROCESS) continue;
 			
-			double start = o.getNode(0).getTime();
+			double start = o.getFirstTime();
 			double finish = o.getNode(o.getLatestVersion()).getTime();
 			if (start < 0) start = (graph.getStat().getTimeUnadjustedMax() - graph.getTimeBase());
 			if (finish < 0) finish = start;

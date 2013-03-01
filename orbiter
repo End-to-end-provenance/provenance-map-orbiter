@@ -32,7 +32,7 @@
 #
 
 UNAME=`uname`
-JAVA="java -Xms128m -Xmx256m"
+JAVA="java -Xms128m -Xmx512m"
 
 
 #

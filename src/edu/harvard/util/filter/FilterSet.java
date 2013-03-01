@@ -41,20 +41,62 @@ import java.util.*;
  */
 public class FilterSet<T> extends Filter<T> {
 	
+	/**
+	 * Operator
+	 */
+	public enum Operator {
+		AND, OR;
+	}
+
+	
 	private LinkedList<Filter<T>> filters;
 	private Listener listener;
 	private boolean acceptAllIfEmpty;
+	private Operator operator;
 
 
 	/**
 	 * Create an instance of class FilterList
 	 * 
+	 * @param operator the boolean operator with which to combine the individual sub-filters
+	 * @param acceptAllIfEmpty whether to accept all values if the filter is empty
+	 */
+	public FilterSet(Operator operator, boolean acceptAllIfEmpty) {
+		
+		this.operator = operator;
+		this.acceptAllIfEmpty = acceptAllIfEmpty;
+		
+		filters = new LinkedList<Filter<T>>();
+		listener = new Listener();
+	}
+
+
+	/**
+	 * Create an instance of class FilterList with the AND boolean operator
+	 * 
 	 * @param acceptAllIfEmpty whether to accept all values if the filter is empty
 	 */
 	public FilterSet(boolean acceptAllIfEmpty) {
-		filters = new LinkedList<Filter<T>>();
-		listener = new Listener();
-		this.acceptAllIfEmpty = acceptAllIfEmpty;
+		this(Operator.AND, acceptAllIfEmpty);
+	}
+
+
+	/**
+	 * Create an instance of class FilterList, accepting all values if the filter is empty
+	 * 
+	 * @param operator the boolean operator with which to combine the individual sub-filters
+	 */
+	public FilterSet(Operator operator) {
+		this(operator, true);
+	}
+
+
+	/**
+	 * Create an instance of class FilterList with the AND boolean operator
+	 * and accepting all values if the filter is empty
+	 */
+	public FilterSet() {
+		this(Operator.AND, true);
 	}
 	
 	
@@ -84,6 +126,18 @@ public class FilterSet<T> extends Filter<T> {
 	
 	
 	/**
+	 * Clear (remove all filters)
+	 */
+	public void clear() {
+		for (Filter<T> f : filters) {
+			f.removeFilterListener(listener);
+		}
+		filters.clear();
+		fireFilterChanged();
+	}
+	
+	
+	/**
 	 * Return the list of filters
 	 *
 	 * @return the linked list of filters
@@ -104,6 +158,27 @@ public class FilterSet<T> extends Filter<T> {
 	
 	
 	/**
+	 * Set the binary boolean operator
+	 * 
+	 * @param operator the new operator
+	 */
+	public void setOperator(Operator operator) {
+		this.operator = operator;
+		fireFilterChanged();
+	}
+	
+	
+	/**
+	 * Get the binary boolean operator
+	 * 
+	 * @return the operator
+	 */
+	public Operator getOperator() {
+		return operator;
+	}
+	
+	
+	/**
 	 * Determine whether to accept a value
 	 * 
 	 * @param value the value to be examined
@@ -113,10 +188,23 @@ public class FilterSet<T> extends Filter<T> {
 		
 		if (filters.isEmpty()) return acceptAllIfEmpty;
 		
-		for (Filter<T> f : filters) {
-			if (!f.accept(value)) return false;
+		switch (operator) {
+		
+		case AND:
+			for (Filter<T> f : filters) {
+				if (!f.accept(value)) return false;
+			}
+			return true;
+			
+		case OR:
+			for (Filter<T> f : filters) {
+				if (f.accept(value)) return true;
+			}
+			return false;
+			
+		default:
+			throw new IllegalStateException("Invalid operator: " + operator);
 		}
-		return true;
 	}
 	
 	
@@ -141,7 +229,11 @@ public class FilterSet<T> extends Filter<T> {
 				first = false;
 			}
 			else {
-				b.append(" and ");
+				switch (operator) {
+				case AND: b.append(" and "); break;
+				case  OR: b.append(" or "); break;
+				default : b.append(" "); b.append(operator); b.append(" ");
+				}
 			}
 			
 			b.append("(");

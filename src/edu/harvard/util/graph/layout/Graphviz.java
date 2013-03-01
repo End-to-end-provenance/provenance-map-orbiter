@@ -66,13 +66,15 @@ public class Graphviz implements ExternalFileConverter, Cancelable, GraphLayoutA
 	public static final String[] ALGORITHMS_DIRECTED = { "dot" };
 	public static final String[] ALGORITHMS_CAN_USE_SUMMARIES = { "dot", "circo", "fdp" };
 	public static final String[] INPUT_FORMATS = { "dot" };
-	public static final String[] RANKDIRS = { "RL", "LR", "TB", "BT" };
-	public static final String[] RANKDIRS_LONG = { "Right-Left", "Left-Right", "Top-Bottom", "Bottom-Top" };
+	public static final String[] RANKDIRS = { "RL", "LR", "BT", "TB" };
+	public static final String[] RANKDIRS_LONG = { "Right-Left", "Left-Right", "Bottom-Top", "Top-Bottom" };
 	protected static String[] outputFormats;
 	
 	public static final double IMPORT_SCALE = 20000.0;
 	public static final double DEFAULT_SUMMARY_NODE_WIDTH = 4;
 	public static final double DEFAULT_SUMMARY_NODE_HEIGHT = 3;
+	
+	private static HashSet<String> verifiedAlgorithms = new HashSet<String>();
 	
 	private String algorithm;
 	private boolean directed;
@@ -151,10 +153,18 @@ public class Graphviz implements ExternalFileConverter, Cancelable, GraphLayoutA
 
 		// Check whether the appropriate external tool is installed
 
-		if (!Utils.isProgramInstalled(algorithm)) {
-			throw new Exception("The external tool for computing "
-				+ algorithm + " is not (properly) installed");
+		synchronized (verifiedAlgorithms) {
+			if (!verifiedAlgorithms.contains(algorithm)) {
+				if (!Utils.isProgramInstalled(algorithm)) {
+					throw new Exception("The external tool for computing "
+						+ algorithm + " is not (properly) installed");
+				}
+				else {
+					verifiedAlgorithms.add(algorithm);
+				}
+			}
 		}
+		
 	}
 	
 	
@@ -244,6 +254,32 @@ public class Graphviz implements ExternalFileConverter, Cancelable, GraphLayoutA
 	 */
 	public void setOptimizedForZoom(boolean v) {
 		zoomBasedLayout = v;
+	}
+	
+	
+	/**
+	 * Return the graph direction
+	 * 
+	 * @return the rankdir direction
+	 */
+	public String getRankDir() {
+		return rankdir;
+	}
+	
+	
+	/**
+	 * Set the graph direction
+	 * 
+	 * @param v the new graph direction (must be an element of RANKDIRS)
+	 */
+	public void setRankDir(String v) {
+		for (String x : RANKDIRS) {
+			if (x.equals(v)) {
+				this.rankdir = v;
+				return;
+			}
+		}
+		throw new IllegalArgumentException("Not a valid RANKDIR");
 	}
 
 	
@@ -551,9 +587,10 @@ public class Graphviz implements ExternalFileConverter, Cancelable, GraphLayoutA
 			numNodes++;
 		}
 		
-		if (numEdges > 1000 || numNodes > 1000) {
+		if (numEdges > 1000 && numNodes > 1000) {
 			// NOTE I wonder if we should do something sane here
-			System.err.println("Warning: Graphviz graph is too big (#nodes = " + numNodes + ", #edges = " + numEdges + ")");
+			System.err.println("Warning: Graphviz graph is too big (#nodes = " + numNodes + ", #edges = " + numEdges + ", parent = \"" + Utils.escapeSimple(node.getLabel()) + "\")");
+			// For debugging: if (numEdges > 10000 && out != System.out) printSummaryNodeToGraphviz(System.out, node, layoutMap);
 		}
 		
 		out.println("}");

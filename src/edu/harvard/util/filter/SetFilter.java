@@ -78,7 +78,6 @@ public class SetFilter<T> extends Filter<T> {
 	 * @return the expression string
 	 */
 	public String toExpressionString() {
-		// TODO Needs to include a user-defined set description name
 		if (all || (exclude && (set == null || set.isEmpty()))) return "";
 		return (exclude ? "not in " : "in ") + name;
 	}

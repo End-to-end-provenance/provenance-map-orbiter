@@ -47,26 +47,39 @@ import javax.swing.*;
 public class FileChoosers {
 	
 	private static FileExtensionFilter documentFilter;
+	
 	private static FileExtensionFilter twigFilter;
 	private static FileExtensionFilter opmFilter;
 	private static FileExtensionFilter rdfFilter;
+	private static FileExtensionFilter phyloxmlFilter;
+	private static FileExtensionFilter ddgFilter;
+	
 	private static FileExtensionFilter csvFilter;
+	private static FileExtensionFilter graphvizFilter;
 	
 	private static File lastChosenGraphFile = null;
 	private static File lastChosenDocumentFile = null;
 	private static File lastChosenCSVFile = null;
+	private static File lastChosenGraphvizFile = null;
+	private static File lastChosenExportFile = null;
 
 
 	/**
 	 * Initialize
 	 */
 	static {
+		
 		documentFilter = new FileExtensionFilter(Document.DESCRIPTION + " (*." + Document.EXTENSION + ", *."
 				+ Document.EXTENSION_COMPRESSED + ")", Document.EXTENSION, Document.EXTENSION_COMPRESSED);
+		
 		twigFilter = new FileExtensionFilter("PASS Twig File (*.twig, *.twig_dump)", "twig", "twig_dump");
 		opmFilter = new FileExtensionFilter("OPM File (*.opm, *.n3, *.xml, *.rdf)", "opm", "n3", "xml", "rdf");
 		rdfFilter = new FileExtensionFilter("RDF File (*.n3, *.nt, *.ttl, *.xml, *.rdf)", "n3", "nt", "ttl", "xml", "rdf");
+		phyloxmlFilter = new FileExtensionFilter("PhyloXML file (*.phyloxml, *.xml)", "phyloxml", "xml");
+		ddgFilter = new FileExtensionFilter("DDG file (*.ddg, *.txt)", "ddg", "txt");
+		
 		csvFilter = new FileExtensionFilter("CSV file (*.csv)", "csv");
+		graphvizFilter = new FileExtensionFilter("Graphviz file (*.dot, *.gv, *.txt)", "dot", "gv", "txt");
 	}
 	
 	
@@ -82,14 +95,18 @@ public class FileChoosers {
 		fc.setAcceptAllFileFilterUsed(false);
 		if (!Utils.isLinux()) {
 			fc.addChoosableFileFilter(rdfFilter);
-			fc.addChoosableFileFilter(twigFilter);
+			fc.addChoosableFileFilter(phyloxmlFilter);
 			fc.addChoosableFileFilter(opmFilter);
+			fc.addChoosableFileFilter(ddgFilter);
+			fc.addChoosableFileFilter(twigFilter);
 			fc.addChoosableFileFilter(documentFilter);
 		}
 		else {
 			fc.addChoosableFileFilter(documentFilter);
-			fc.addChoosableFileFilter(opmFilter);
 			fc.addChoosableFileFilter(twigFilter);
+			fc.addChoosableFileFilter(ddgFilter);
+			fc.addChoosableFileFilter(opmFilter);
+			fc.addChoosableFileFilter(phyloxmlFilter);
 			fc.addChoosableFileFilter(rdfFilter);
 		}
 		
@@ -169,5 +186,70 @@ public class FileChoosers {
 
 		lastChosenCSVFile = fc.getSelectedFile();
 		return lastChosenCSVFile;
+	}
+
+
+	/**
+	 * Choose a Graphviz file to open or save
+	 */
+	public static File chooseGraphvizFile(Component parent, String title, boolean open) {
+		JFileChooser fc = new JFileChooser();
+		fc.setDialogTitle(title);
+		fc.setDialogType(open ? JFileChooser.OPEN_DIALOG : JFileChooser.SAVE_DIALOG);
+		if (lastChosenGraphvizFile != null) fc.setSelectedFile(lastChosenGraphvizFile);
+
+		fc.setAcceptAllFileFilterUsed(false);
+		fc.addChoosableFileFilter(graphvizFilter);
+		
+		FileGroupFilter all = new FileGroupFilter(fc.getChoosableFileFilters());
+		if (all.size() > 1) {
+			fc.addChoosableFileFilter(all);
+			fc.setFileFilter(all);
+		}
+
+		int r = 0;
+		if (open) {
+			r = fc.showOpenDialog(parent);
+		}
+		else {
+			r = fc.showSaveDialog(parent);
+		}
+		if (r != JFileChooser.APPROVE_OPTION) return null;
+
+		lastChosenGraphvizFile = fc.getSelectedFile();
+		return lastChosenGraphvizFile;
+	}
+
+
+	/**
+	 * Choose a file to export
+	 */
+	public static File chooseExportFile(Component parent, String title) {
+		JFileChooser fc = new JFileChooser();
+		fc.setDialogTitle(title);
+		fc.setDialogType(JFileChooser.SAVE_DIALOG);
+		if (lastChosenExportFile != null) fc.setSelectedFile(lastChosenExportFile);
+
+		fc.setAcceptAllFileFilterUsed(false);
+		if (!Utils.isLinux()) {
+			fc.addChoosableFileFilter(graphvizFilter);
+			fc.addChoosableFileFilter(rdfFilter);
+		}
+		else {
+			fc.addChoosableFileFilter(rdfFilter);
+			fc.addChoosableFileFilter(graphvizFilter);
+		}
+		
+		FileGroupFilter all = new FileGroupFilter(fc.getChoosableFileFilters());
+		if (all.size() > 1) {
+			fc.addChoosableFileFilter(all);
+			fc.setFileFilter(all);
+		}
+
+		int r = fc.showSaveDialog(parent);
+		if (r != JFileChooser.APPROVE_OPTION) return null;
+
+		lastChosenExportFile = fc.getSelectedFile();
+		return lastChosenExportFile;
 	}
 }

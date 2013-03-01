@@ -34,6 +34,7 @@ package edu.harvard.pass.orbiter;
 import java.util.Vector;
 
 import edu.harvard.pass.orbiter.gui.*;
+import edu.harvard.util.*;
 
 import javax.swing.*;
 
@@ -72,7 +73,9 @@ public class Main {
 			System.setProperty("com.apple.macos.smallTabs", "true");
 			System.setProperty("com.apple.mrj.application.live-resize", "true");
 			
-			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+			if (!Utils.isLinux()) {
+				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+			}
 		}
 		catch (Exception e) {
 			// do a silent failover

@@ -78,6 +78,8 @@ public class Document implements java.io.Serializable {
 
 	private static final long serialVersionUID = 4721794237917256753L;
 	
+	public static final boolean HEADLESS = false;
+	
 	public static final String DESCRIPTION = "Orbiter Project";
 	public static final String EXTENSION = "orb";
 	public static final String EXTENSION_COMPRESSED = "orc";
@@ -90,6 +92,7 @@ public class Document implements java.io.Serializable {
 	private PGraph graph;
 
 	private String summarizationAlgorithm = null;
+	private boolean refineSummaryUniqueInOut = false;
 	private boolean refineSummaryFileExt = false;
 	private boolean refineSummaryRandomly = false;
 
@@ -219,9 +222,11 @@ public class Document implements java.io.Serializable {
 			GraphLayoutAlgorithm layoutAlgorithm;
 
 			try {
+				// XXX The layout algorithm choice should not be hard-coded
 				Graphviz g = new Graphviz();
 				g.setBySummaries(true);
 				g.setOptimizedForZoom(true);
+				//AbegoTreeLayout g = new AbegoTreeLayout();
 				
 				layoutAlgorithm = g;
 			}
@@ -260,31 +265,41 @@ public class Document implements java.io.Serializable {
 
 			master.add(new LoadPGraphJob(uri, parser, pg));
 			if (finalPanel.provRankCheck.isSelected()) master.add(new ProvRankJob(pg));
+			if (finalPanel.subRankCheck.isSelected()) master.add(new SubRankJob(pg));
 			
-			Class<? extends GraphSummarizer> summarizerClass
-				= SummarizationConfigPanel.SUMMARIZATION_ALGORITHMS.get(summarizationPanel.summarizationAlgorithm);
-			
-			if (summarizerClass == null) summarizerClass = NullSummarizer.class;
-			
-			try {
-				master.add(new GraphSummaryJob(summarizerClass.newInstance(), bpg));
-			} catch (InstantiationException e) {
-				throw new InternalError();
-			} catch (IllegalAccessException e) {
-				throw new InternalError();
-			}
-			
-			if (summarizerClass != NullSummarizer.class) {
-				if (summarizationPanel.refineSummaryFileExt) {
-					master.add(new GraphSummaryJob(new FileExtSummarizer(), bpg, "Refining graph summary"));
+			if (!HEADLESS) {
+				Class<? extends GraphSummarizer> summarizerClass
+					= SummarizationConfigPanel.SUMMARIZATION_ALGORITHMS.get(summarizationPanel.summarizationAlgorithm);
+				
+				if (summarizerClass == null) summarizerClass = NullSummarizer.class;
+				
+				try {
+					master.add(new GraphSummaryJob(summarizerClass.newInstance(), bpg));
+				} catch (InstantiationException e) {
+					throw new InternalError();
+				} catch (IllegalAccessException e) {
+					throw new InternalError();
 				}
 				
-				if (summarizationPanel.refineSummaryRandomly) {
-					master.add(new GraphSummaryJob(new SmallGroupsGraphSummarizer(), bpg, "Refining graph summary"));
+				if (summarizerClass != NullSummarizer.class) {
+					if (summarizationPanel.refineSummaryUniqueInOut) {
+						master.add(new GraphSummaryJob(new UniqueInOutSummarizer(), bpg, "Refining graph summary"));
+						master.add(new GraphSummaryJob(new UniqueInOutSummarizer(), bpg, "Refining graph summary"));
+					}
+					
+					if (summarizationPanel.refineSummaryFileExt) {
+						master.add(new GraphSummaryJob(new FileExtSummarizer(), bpg, "Refining graph summary"));
+					}
+					
+					if (summarizationPanel.refineSummaryRandomly) {
+						master.add(new GraphSummaryJob(new SmallGroupsGraphSummarizer(), bpg, "Refining graph summary"));
+					}
 				}
 			}
 			
-			master.add(new GraphLayoutAlgorithmJob(layoutAlgorithm, bpg, layoutAlgorithm.isZoomOptimized() ? 2 : -1));
+			if (!HEADLESS) {
+				master.add(new GraphLayoutAlgorithmJob(layoutAlgorithm, bpg, layoutAlgorithm.isZoomOptimized() ? 2 : -1));
+			}
 			
 			
 			// Run the jobs
@@ -296,8 +311,15 @@ public class Document implements java.io.Serializable {
 
 			PGraph graph = pg.get();
 			
+			if (graph.getLayouts().isEmpty()) {
+				if (!HEADLESS) {
+					graph.addLayout(GraphLayout.createStub(graph, layoutAlgorithm, layoutAlgorithm.getName()));
+				}
+			}
+			
 			Document d = new Document(name, graph, uri, file);
 			d.summarizationAlgorithm = summarizationPanel.summarizationAlgorithm;
+			d.refineSummaryUniqueInOut = summarizationPanel.refineSummaryUniqueInOut;
 			d.refineSummaryFileExt = summarizationPanel.refineSummaryFileExt;
 			d.refineSummaryRandomly = summarizationPanel.refineSummaryRandomly;
 			
@@ -373,13 +395,19 @@ public class Document implements java.io.Serializable {
 		if (summarizerClass == null) summarizerClass = NullSummarizer.class;
 	
 		try {
-			master.add(new GraphSummaryJob(summarizerClass.newInstance(), bpg));
+			GraphSummarizer summarizer = summarizerClass.newInstance();
+			master.add(new GraphSummaryJob(summarizer, bpg));
 		} catch (InstantiationException e) {
 			throw new InternalError();
 		} catch (IllegalAccessException e) {
 			throw new InternalError();
 		}
 		
+		if (refineSummaryUniqueInOut) {
+			master.add(new GraphSummaryJob(new UniqueInOutSummarizer(), bpg, "Refining graph summary"));
+			master.add(new GraphSummaryJob(new UniqueInOutSummarizer(), bpg, "Refining graph summary"));
+		}
+
 		if (refineSummaryFileExt) {
 			master.add(new GraphSummaryJob(new FileExtSummarizer(), bpg, "Refining graph summary"));
 		}
@@ -480,6 +508,7 @@ public class Document implements java.io.Serializable {
 		attrs.addAttribute("", "", "summarization", "CDATA", summarizationAlgorithm);
 		attrs.addAttribute("", "", "summarizationRefineFileExt", "CDATA", refineSummaryFileExt ? "true" : "false");
 		attrs.addAttribute("", "", "summarizationRefineRandomly", "CDATA", refineSummaryRandomly ? "true" : "false");
+		attrs.addAttribute("", "", "summarizationRefineUniqueInOut", "CDATA", refineSummaryUniqueInOut ? "true" : "false");
 		hd.startElement("", "", DOM_ELEMENT, attrs);
 		
 		
@@ -561,6 +590,7 @@ public class Document implements java.io.Serializable {
 		d.summarizationAlgorithm = dp.summarizationAlgorithm;
 		d.refineSummaryFileExt = dp.refineSummaryFileExt;
 		d.refineSummaryRandomly = dp.refineSummaryRandomly;
+		d.refineSummaryUniqueInOut = dp.refineSummaryUniqueInOut;
 		
 		return d;
 	}
@@ -581,6 +611,7 @@ public class Document implements java.io.Serializable {
 		private String summarizationAlgorithm = "Process Tree";
 		private boolean refineSummaryFileExt = true;
 		private boolean refineSummaryRandomly = false;
+		private boolean refineSummaryUniqueInOut = false;
 
 		
 		/**
@@ -610,6 +641,8 @@ public class Document implements java.io.Serializable {
 					refineSummaryFileExt = "true".equalsIgnoreCase(XMLUtils.getAttribute(attributes, "summarizationRefineFileExt"));
 				if (XMLUtils.getAttribute(attributes, "summarizationRefineRandomly", null) != null)
 					refineSummaryRandomly = "true".equalsIgnoreCase(XMLUtils.getAttribute(attributes, "summarizationRefineRandomly"));
+				if (XMLUtils.getAttribute(attributes, "summarizationRefineUniqueInOut", null) != null)
+					refineSummaryUniqueInOut = "true".equalsIgnoreCase(XMLUtils.getAttribute(attributes, "summarizationRefineUniqueInOut"));
 			}
 			
 			
@@ -702,16 +735,19 @@ public class Document implements java.io.Serializable {
 		
 		public static final Map<String, Class<? extends GraphSummarizer>> SUMMARIZATION_ALGORITHMS;
 		private static String lastSummarizationAlgorithm = "Timestamps";
+		private static boolean lastRefineSummaryUniqueInOut = true;
 		private static boolean lastRefineSummaryFileExt = true;
 		private static boolean lastRefineSummaryRandomly = false;
 
 		public String summarizationAlgorithm = null;
+		public boolean refineSummaryUniqueInOut = false;
 		public boolean refineSummaryFileExt = false;
 		public boolean refineSummaryRandomly = false;
 
 		private JLabel topLabel;
 		private JLabel algorithmLabel;
 		private JComboBox algorithmCombo;
+		private JCheckBox refineUniqueInOutCheck;
 		private JCheckBox refineFileExtCheck;
 		private JCheckBox refineRandomlyCheck;
 		
@@ -812,6 +848,17 @@ public class Document implements java.io.Serializable {
 
 			gridy++;
 			
+			refineUniqueInOutCheck = new JCheckBox("Refine the summary by collapsing unique inputs/outputs");
+			refineUniqueInOutCheck.setSelected(lastRefineSummaryUniqueInOut);
+			c.fill = GridBagConstraints.HORIZONTAL;
+			c.gridx = 0;
+			c.gridy = gridy;
+			c.gridwidth = 2;
+			panel.add(refineUniqueInOutCheck, c);
+			c.gridwidth = 1;
+			
+			gridy++;
+			
 			refineFileExtCheck = new JCheckBox("Refine the summary using file extensions");
 			refineFileExtCheck.setSelected(lastRefineSummaryFileExt);
 			c.fill = GridBagConstraints.HORIZONTAL;
@@ -862,10 +909,13 @@ public class Document implements java.io.Serializable {
 			summarizationAlgorithm = (String) algorithmCombo.getSelectedItem();
 			boolean none = "<none>".equalsIgnoreCase(summarizationAlgorithm);
 			
+			refineSummaryUniqueInOut = refineUniqueInOutCheck.isSelected() && !none;
 			refineSummaryFileExt = refineFileExtCheck.isSelected() && !none;
 			refineSummaryRandomly = refineRandomlyCheck.isSelected() && !none;
 			
 			lastSummarizationAlgorithm = summarizationAlgorithm;
+			
+			lastRefineSummaryUniqueInOut = refineSummaryUniqueInOut;
 			lastRefineSummaryFileExt = refineSummaryFileExt;
 			lastRefineSummaryRandomly = refineSummaryRandomly;
 		}
@@ -879,6 +929,7 @@ public class Document implements java.io.Serializable {
 			String a = (String) algorithmCombo.getSelectedItem();
 			boolean none = "<none>".equalsIgnoreCase(a);
 			
+			refineUniqueInOutCheck.setEnabled(!none);
 			refineFileExtCheck.setEnabled(!none);
 			refineRandomlyCheck.setEnabled(!none);
 		}
@@ -903,6 +954,7 @@ public class Document implements java.io.Serializable {
 		
 		private JLabel topLabel;
 		private JLabel moreLabel;
+		public  JCheckBox subRankCheck;
 		public  JCheckBox provRankCheck;
 		
 		
@@ -966,6 +1018,17 @@ public class Document implements java.io.Serializable {
 			c.gridy = gridy;
 			c.gridwidth = 2;
 			panel.add(provRankCheck, c);
+			c.gridwidth = 1;
+			
+			gridy++;
+			
+			subRankCheck = new JCheckBox("Compute SubRank (a measure of ubiquity of nodes)");
+			subRankCheck.setSelected(false);
+			c.fill = GridBagConstraints.HORIZONTAL;
+			c.gridx = 0;
+			c.gridy = gridy;
+			c.gridwidth = 2;
+			panel.add(subRankCheck, c);
 			c.gridwidth = 1;
 			
 			gridy++;

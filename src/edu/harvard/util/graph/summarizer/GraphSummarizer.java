@@ -47,4 +47,11 @@ public interface GraphSummarizer {
 	 * @param graph the graph
 	 */
 	public void summarize(BaseGraph graph);
+	
+	/**
+	 * Get the name of the summarization algorithm
+	 * 
+	 * @return the name of the summarization algorithm
+	 */
+	public String getName();
 }

@@ -52,4 +52,14 @@ public class NullSummarizer implements GraphSummarizer {
 		graph.summarizationBegin();
 		graph.summarizationEnd();
 	}
+	
+	
+	/**
+	 * Get the name of the summarization algorithm
+	 * 
+	 * @return the name of the summarization algorithm
+	 */
+	public String getName() {
+		return "Pass-through";
+	}
 }

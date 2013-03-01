@@ -39,6 +39,9 @@ import edu.harvard.util.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.*;
 
 import java.util.ArrayList;
@@ -132,6 +135,8 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 	private int semanticZoomSizeThreshold;
 	private boolean reconfigureBasedOnLayout;
 	private boolean autoManageSelection;
+	
+	private boolean filterOnOriginals;
 
 	
 	// Font
@@ -192,6 +197,8 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 		semanticZoomSizeThreshold = 45;
 		reconfigureBasedOnLayout = true;
 		autoManageSelection = true;
+		
+		filterOnOriginals = true;
 		
 		
 		// The graph cache
@@ -315,6 +322,16 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 	 */
 	public G getGraph() {
 		return graph;
+	}
+	
+
+	/**
+	 * Return the graph layout
+	 *
+	 * @return the graph layout
+	 */
+	public GraphLayout getGraphLayout() {
+		return layout;
 	}
 	
 	
@@ -469,6 +486,14 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 	public void removeFilter(Filter<N> filter) {
 		nodeFilters.remove(filter);
 	}
+
+
+	/**
+	 * Remove all node filters
+	 */
+	public void clearFilters() {
+		nodeFilters.clear();
+	}
 	
 	
 	/**
@@ -499,6 +524,14 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 	public void removeHighlightFilter(Filter<N> filter) {
 		nodeHighlightFilters.remove(filter);
 	}
+
+
+	/**
+	 * Remove all node highlight filters
+	 */
+	public void clearHighlightFilters() {
+		nodeHighlightFilters.clear();
+	}
 	
 	
 	/**
@@ -508,6 +541,26 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 	 */
 	public FilterSet<N> getHighlightFilters() {
 		return nodeHighlightFilters;
+	}
+	
+	
+	/**
+	 * Set whether to run filters on the original nodes
+	 * 
+	 * @param onOriginals true to run filters on originals
+	 */
+	public void setFilteringOnOriginals(boolean onOriginals) {
+		filterOnOriginals = onOriginals;
+	}
+	
+	
+	/**
+	 * Determine whether the component should run filters on the original nodes
+	 * 
+	 * @return true to run filters on originals
+	 */
+	public boolean isFilteringOnOriginals() {
+		return filterOnOriginals;
 	}
 	
 	
@@ -624,6 +677,27 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 	
 	
 	/**
+	 * Select a collection of nodes
+	 * 
+	 * @param nodes the nodes to select
+	 */
+	public void selectNodes(Collection<BaseNode> nodes) {
+
+		selectedNodes.clear();
+		
+		for (BaseNode node : nodes) {
+			if (node.getGraph() != graph) {
+				throw new IllegalArgumentException("Node " + node + " is not in the graph");
+			}
+			selectedNodes.add(node);
+		}
+		
+		computeSelectionCache();
+		fireSelectionChanged();
+	}
+	
+	
+	/**
 	 * Clear selection
 	 */
 	public void clearSelection() {
@@ -664,6 +738,9 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 		
 		BaseNode node = graph.getBaseNode(index);
 		BaseSummaryNode s = node.getParent();
+		if (DEBUG_PERFORMANCE && s.getInternalEdges().size() >= 4000) {
+			System.err.println("Too many edges: " + s.getInternalEdges().size() + " in " + s.getLabel());
+		}
 		layout.getAlgorithm().updateLayout(layout, s, null);
 		
 		long t_end = 0;
@@ -724,7 +801,9 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 			
 			// Check if the target node is visible in the filtered graph
 			
-			if (target.isVisible() && nodeFilters.accept(Utils.<N>cast(target))) {
+			if (target.isVisible()
+					&& nodeFilters.accept(!filterOnOriginals ? Utils.<N>cast(target)
+							: Utils.<N>cast(target).getOriginal())) {
 				visited.add(target);
 				
 				
@@ -837,7 +916,12 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 		for (N node : graph.getNodes()) {
 
 			if (!node.isVisible()) continue;
-			if (!nodeFilters.accept(node)) continue;
+			if (filterOnOriginals) {
+				if (!nodeFilters.accept(node.getOriginal())) continue;
+			}
+			else { 
+				if (!nodeFilters.accept(node)) continue;
+			}
 			
 			
 			// Add the corresponding summary node
@@ -928,8 +1012,14 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 		for (N node : graph.getNodes()) {
 
 			if (!node.isVisible()) continue;
-			if (!nodeFilters.accept(node)) continue;
-			if (!nodeHighlightFilters.accept(node)) continue;
+			if (filterOnOriginals) {
+				if (!nodeFilters.accept(node.getOriginal())) continue;
+				if (!nodeHighlightFilters.accept(node.getOriginal())) continue;
+			}
+			else { 
+				if (!nodeFilters.accept(node)) continue;
+				if (!nodeHighlightFilters.accept(node)) continue;
+			}
 			
 			
 			// Add the corresponding summary node
@@ -975,36 +1065,34 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 	 * Expand a summary node
 	 * 
 	 * @param node the summary node to expand
+	 * @return true if the node was actually expanded
 	 */
-	public void expandNode(BaseNode node) {
+	public boolean expandNode(BaseNode node) {
 		
-		if (!(node instanceof BaseSummaryNode)) return;
-		if (!node.isVisible()) return;
+		if (!(node instanceof BaseSummaryNode)) return false;
+		if (!node.isVisible()) return false;
 		
 		BaseSummaryNode s = (BaseSummaryNode) node;
-		if (expandedSummaryNodes.contains(s)) return;
+		if (expandedSummaryNodes.contains(s)) return false;
 		
 		GraphLayoutNode ls = getLayoutNode(s.getIndex());
-		if (ls == null) return;
+		if (ls == null) return false;
 		
 		
 		// Expand all parents
 		
 		for (BaseNode n = s.getParent(); n != null; n = n.getParent()) {
-			if (n instanceof BaseSummaryNode) expandNode(n);
+			if (n instanceof BaseSummaryNode) {
+				if (!expandedSummaryNodes.contains(n)) {
+					if (!expandNode(n)) return false;
+				}
+			}
 		}
 		
-		
-		// Move the node from the set of nodes to the set of expanded summary nodes
-		
-		if (!expandedSummaryNodes.add(s)) return;
-		if (!nodes.remove(ls)) return;
-		summaryNodes.add(ls);
-		
-		highlightedNodes.remove(ls);
+		if (expandedSummaryNodes.contains(s)) return false;
 		
 		
-		// Add the child nodes
+		// Get the child nodes
 		
 		HashSet<GraphLayoutNode> toExpand = new HashSet<GraphLayoutNode>();
 		
@@ -1020,11 +1108,16 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 			}
 			
 			if (n instanceof Node<?, ?>) {
-				if (!nodeFilters.accept(Utils.<N>cast(n))) continue;
+				if (filterOnOriginals) {
+					if (!nodeFilters.accept(Utils.<N>cast(n).getOriginal())) continue;
+				}
+				else { 
+					if (!nodeFilters.accept(Utils.<N>cast(n))) continue;
+				}
 			}
 			
 			
-			// Add the child node
+			// Get the layout for a child node
 			
 			GraphLayoutNode ln = getLayoutNode(n.getIndex());
 			if (ln == null) {
@@ -1032,9 +1125,27 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 				throw new IllegalStateException("There is no layout information for node " + n);
 			}
 			
-			nodes.add(ln);
 			toExpand.add(ln);
+		}
+		
+		
+		// Move the node from the set of nodes to the set of expanded summary nodes
+		
+		if (!nodes.remove(ls)) return false;
+		
+		if (!expandedSummaryNodes.add(s)) return false;
+		summaryNodes.add(ls);
+		
+		highlightedNodes.remove(ls);
+		
+		
+		// Add the expanded nodes
+		
+		for (GraphLayoutNode ln : toExpand) {
+			BaseNode n = ln.getBaseNode();
 			
+			nodes.add(ln);
+						
 			
 			// Check whether the node should be highlighted
 			
@@ -1093,6 +1204,8 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 		// Recompute the node selection cache
 		
 		computeSelectionCache();
+		
+		return true;
 	}
 	
 	
@@ -1517,8 +1630,9 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 					}
 					
 					if (DEBUG_SEMANTIC_ZOOM) System.err.println("[Zoom " + zoom + "] Expand  : " + n.getBaseNode().getLabel());
-					expandNode(node);
-					done = false;
+					if (expandNode(node)) {
+						done = false;
+					}
 				}
 			}
 		}
@@ -1684,16 +1798,10 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 				
 				for (BaseNode n : selectedNodes) {
 					if (getLayoutNode(map(n).getIndex()) == e.getFrom()) {
-						for (BaseEdge b : n.getOutgoingBaseEdges()) {
-							GraphLayoutNode ln = getLayoutNode(map(b.getBaseTo()).getIndex());
-							if (ln == e.getTo()) fromSelectionLevel = GraphDecorator.SELECTED;
-						}
+						fromSelectionLevel = GraphDecorator.SELECTED;
 					}
 					if (getLayoutNode(map(n).getIndex()) == e.getTo()) {
-						for (BaseEdge b : n.getIncomingBaseEdges()) {
-							GraphLayoutNode ln = getLayoutNode(map(b.getBaseFrom()).getIndex());
-							if (ln == e.getFrom()) toSelectionLevel = GraphDecorator.SELECTED;
-						}
+						toSelectionLevel = GraphDecorator.SELECTED;
 					}
 				}
 
@@ -1709,6 +1817,10 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 				}
 				if (drawShadedEdgesOutsideOfDisplay && !both) {
 					double f = one ? 0.5f : 0.125f;
+					if (fromSelectionLevel == GraphDecorator.SELECTED
+							|| toSelectionLevel == GraphDecorator.SELECTED) {
+						f = one ? 0.75f : 0.5f;
+					}
 					int cr = (int)(bg.getRed  () + f * (c.getRed  () - bg.getRed  ()));
 					int cg = (int)(bg.getGreen() + f * (c.getGreen() - bg.getGreen()));
 					int cb = (int)(bg.getBlue () + f * (c.getBlue () - bg.getBlue ()));
@@ -1891,6 +2003,8 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 		
 		// Draw outlines of expanded summary nodes
 		
+		g2.setStroke(stroke);
+		
 		if (drawExpandedNodes) {
 			for (GraphLayoutNode n : immutable_summaryNodes) {
 				
@@ -1920,6 +2034,8 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 		
 
 		// Draw nodes
+		
+		g2.setStroke(stroke);
 
 		if (drawNodesThisTime) {
 
@@ -2009,8 +2125,10 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 						
 						// Draw the oval
 						
-						g.setColor(colorFill);
-						g.fillOval(r.x, r.y, r.width, r.height);
+						if (colorFill != null) {
+							g.setColor(colorFill);
+							g.fillOval(r.x, r.y, r.width, r.height);
+						}
 						
 						g.setColor(colorOutline);
 						if (selected) g2.setStroke(selectionStroke);
@@ -2026,8 +2144,10 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 						
 						// Draw the point
 		
-						g.setColor(colorFill);
-						g.fillOval(r.x - pointSize/2, sy - pointSize/2, pointSize, pointSize);
+						if (colorFill != null) {
+							g.setColor(colorFill);
+							g.fillOval(r.x - pointSize/2, sy - pointSize/2, pointSize, pointSize);
+						}
 						
 						if (drawLabel) {
 							g.setColor(decorator.getBackgroundColor());
@@ -2152,6 +2272,172 @@ public class GraphDisplay<N extends Node<N, E>, E extends Edge<N>, S extends Sum
 		}
 		
 		return null;
+	}
+	
+	
+	/**
+	 * Export to Graphviz with formatting
+	 * 
+	 * @param file the file to write to
+	 * @param all true to export all nodes, false to export only from the current zoom level
+	 * @throws IOException on I/O error
+	 */
+	public void exportToGraphvizWithFormatting(File file, boolean all) throws IOException {
+		PrintWriter out = new PrintWriter(file);
+		exportToGraphvizWithFormatting(out, all);
+		out.close();
+	}
+	
+	
+	/**
+	 * Export to Graphviz with formatting
+	 * 
+	 * @param out the writer to write to
+	 * @param all true to export all nodes, false to export only from the current zoom level
+	 */
+	public void exportToGraphvizWithFormatting(PrintWriter out, boolean all) {
+		
+		// Start
+		
+		out.println("digraph \"Graph\" {");
+		if (layout.getAlgorithm() instanceof Graphviz) {
+			out.println("  rankdir=" + ((Graphviz) layout.getAlgorithm()).getRankDir() + ";");
+		}
+		
+		boolean nodesAsPoints = drawNodesAsPoints && false;	// Change to true for Graphviz 11/2011 or later
+		
+		
+		// Gather all nodes
+		
+		Collection<BaseNode> nodes; 
+		if (all) {
+			nodes = this.graph.getBaseNodes();
+		}
+		else {
+			nodes = new ArrayList<BaseNode>(this.nodes.size());
+			for (GraphLayoutNode n : this.nodes) nodes.add(n.getBaseNode());
+		}
+		
+		
+		// Export all nodes
+		
+		final String ELLIPSE = "ellipse";
+		
+		for (BaseNode n : nodes) {
+			if (!n.isVisible()) continue;
+				
+			String label = n.getLabel();
+			if (label == null || " ".equals(label)) label = "";
+
+			String shape;
+			Color fillColor;
+			Color textColor;
+			Color outlineColor;
+			
+			if (n instanceof BaseSummaryNode) {
+				shape = "box";
+				fillColor = decorator.getSummaryNodeColor(Utils.<S>cast(n),
+						expandedSummaryNodes.contains(n), GraphDecorator.NONE);
+				textColor = decorator.getSummaryNodeTextColor(Utils.<S>cast(n),
+						expandedSummaryNodes.contains(n), GraphDecorator.NONE);
+				outlineColor = decorator.getSummaryNodeOutlineColor(Utils.<S>cast(n),
+						expandedSummaryNodes.contains(n), GraphDecorator.NONE);
+			}
+			else {
+				shape = nodesAsPoints ? "point" : ("".equals(label) ? "circle" : ELLIPSE);
+				fillColor = decorator.getNodeColor(Utils.<N>cast(n), GraphDecorator.NONE);
+				textColor = decorator.getNodeTextColor(Utils.<N>cast(n), GraphDecorator.NONE);
+				outlineColor = decorator.getNodeOutlineColor(Utils.<N>cast(n), GraphDecorator.NONE);
+				if (nodesAsPoints) {
+					outlineColor = fillColor;
+				}
+			}
+			
+			String style;
+			if (shape != ELLIPSE) {
+				style = "shape=" + shape + ",";
+			}
+			else {
+				style = "";
+			}
+			if (fillColor == null) {
+				style += "style=solid";
+			}
+			else {
+				style += "style=filled,fillcolor="
+						+ String.format("\"#%02x%02x%02x\"", fillColor.getRed(), fillColor.getGreen(), fillColor.getBlue());
+			}
+			if (textColor != Color.BLACK) {
+				style += ",fontcolor="
+						+ String.format("\"#%02x%02x%02x\"", textColor.getRed(), textColor.getGreen(), textColor.getBlue());
+			}
+			if (textColor != Color.BLACK) {
+				style += ",color="
+						+ String.format("\"#%02x%02x%02x\"", outlineColor.getRed(), outlineColor.getGreen(), outlineColor.getBlue());
+			}
+			
+			String labelType = nodesAsPoints ? "xlabel" : "label";			
+			out.println("  \"" + n.getIndex() + "\" [" + style + "," + labelType + "=\"" + Utils.escapeSimple(label) + "\"];");
+		}
+		
+		
+		// Gather all edges
+		
+		Collection<BaseEdge> edges; 
+		if (all) {
+			edges = this.graph.getBaseEdges();
+		}
+		else {
+			edges = new ArrayList<BaseEdge>(this.edges.size());
+			for (GraphLayoutEdge n : this.edges) {
+				if (n.getBaseEdge() == null) {
+					throw new RuntimeException("Base edge is null");
+				}
+				edges.add(n.getBaseEdge());
+			}
+		}
+		
+		
+		// Export all edges
+		
+		for (BaseEdge e : edges) {
+			if (!e.getBaseFrom().isVisible() || !e.getBaseTo().isVisible()) continue;
+			
+			Color color;
+			if (e instanceof BaseSummaryEdge) {
+				color = decorator.getSummaryEdgeColor((BaseSummaryEdge) e,
+						GraphDecorator.NONE, GraphDecorator.NONE);
+			}
+			else {
+				color = decorator.getEdgeColor(Utils.<E>cast(e),
+						GraphDecorator.NONE, GraphDecorator.NONE);
+			}
+			
+			String style;
+			if (color == Color.BLACK && drawArrows) {
+				style = "";
+			}
+			else {
+				style = " [";
+				if (!drawArrows) {
+					style += "arrowhead=none";
+				}
+				if (color != Color.BLACK) {
+					if (!drawArrows) style += ",";
+					style += "color="
+							+ String.format("\"#%02x%02x%02x\"", color.getRed(), color.getGreen(), color.getBlue());
+				}
+				style += "]";
+			}
+			
+			out.println("  \"" + e.getBaseFrom().getIndex() + "\" -> \"" + e.getBaseTo().getIndex() + "\""
+					+ style + ";");
+		}
+		
+		
+		// Finish
+		
+		out.println("}");
 	}
 	
 	

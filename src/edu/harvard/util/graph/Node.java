@@ -62,6 +62,19 @@ public class Node<N extends BaseNode, E extends BaseEdge> extends BaseNode imple
 	protected Node(int index) {
 		super(index);
 	}
+	
+	
+	/**
+	 * Get the original node, if this node is derived
+	 * 
+	 * @return original the original node, or this if this is the original
+	 */
+	@SuppressWarnings("unchecked")
+	public N getOriginal() {
+		BaseNode original = getBaseOriginal();
+		if (original instanceof BaseSummaryNode) throw new IllegalStateException();
+		return (N) original;
+	}
 
 	
 	/**
@@ -70,8 +83,8 @@ public class Node<N extends BaseNode, E extends BaseEdge> extends BaseNode imple
 	 * @return a collection of edges
 	 */
 	@SuppressWarnings("unchecked")
-	public Collection<E> getIncomingEdges() {
-		return (Collection<E>) incoming;
+	public List<E> getIncomingEdges() {
+		return (List<E>) incoming;
 	}
 	
 	
@@ -81,8 +94,8 @@ public class Node<N extends BaseNode, E extends BaseEdge> extends BaseNode imple
 	 * @return a collection of edges
 	 */
 	@SuppressWarnings("unchecked")
-	public Collection<E> getOutgoingEdges() {
-		return (Collection<E>) outgoing;
+	public List<E> getOutgoingEdges() {
+		return (List<E>) outgoing;
 	}
 	
 	
@@ -92,8 +105,8 @@ public class Node<N extends BaseNode, E extends BaseEdge> extends BaseNode imple
 	 * @return a collection of nodes
 	 */
 	@SuppressWarnings("unchecked")
-	public Collection<N> getIncomingNodes() {
-		return (Collection<N>) getIncomingBaseNodes();
+	public List<N> getIncomingNodes() {
+		return (List<N>) getIncomingBaseNodes();
 	}
 	
 	
@@ -103,8 +116,8 @@ public class Node<N extends BaseNode, E extends BaseEdge> extends BaseNode imple
 	 * @return a collection of nodes
 	 */
 	@SuppressWarnings("unchecked")
-	public Collection<N> getOutgoingNodes() {
-		return (Collection<N>) getOutgoingBaseNodes();
+	public List<N> getOutgoingNodes() {
+		return (List<N>) getOutgoingBaseNodes();
 	}
 
 	

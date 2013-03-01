@@ -59,6 +59,8 @@ public class LegendPanel extends JPanel {
 	
 	private TreeMap<String, PASSDecorator.ColorNodesBy> nameToColorNodesBy;
 	private HashMap<PASSDecorator.ColorNodesBy, String> colorNodesByToName;
+	private ArrayList<PASSDecorator.ColorNodesBy> colorNodesByList;
+	private HashMap<PASSDecorator.ColorNodesBy, Integer> colorNodesByToIndex;
 	
 	private JScrollPane scroll;
 	private JPanel panel;
@@ -92,7 +94,25 @@ public class LegendPanel extends JPanel {
 		colorNodesByToName = new HashMap<PASSDecorator.ColorNodesBy, String>();
 		
 		colorNodesByToName.put(PASSDecorator.ColorNodesBy.TYPE, "Type");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.SUBRANK, "SubRank");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.SUBRANK_LOG, "SubRank--Log");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.SUBRANK_MAX_JUMP, "SubRank--Max Log Jump");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.SUBRANK_MEAN_JUMP, "SubRank--Mean Log Jump");
 		colorNodesByToName.put(PASSDecorator.ColorNodesBy.PROVRANK, "ProvRank");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.PROVRANK_LOG, "ProvRank--Log");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.PROVRANK_MAX_JUMP, "ProvRank--Max Log Jump");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.PROVRANK_MEAN_JUMP, "ProvRank--Mean Log Jump");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.DANGALCHEV_CC, "Dang.'s Closeness Cntr.");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.DANGALCHEV_CC_INVERTED, "Dang.'s Closeness Cntr.--Inverted (D.)");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.DANGALCHEV_CC_UNDIRECTED, "Dang.'s Closeness Cntr.--Undirected (D.)");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.BETWEENNESS_CENTRALITY, "Betweenness Cntr.");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.BETWEENNESS_CENTRALITY_UNDIRECTED, "Betweenness Cntr.--Undirected");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.DEGREE, "Degree");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.INDEGREE, "Degree--Indegree");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.OUTDEGREE, "Degree--Outdegree");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.DEGREE_SCALED, "Degree--Scaled^-1/4: Degree");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.INDEGREE_SCALED, "Degree--Scaled^-1/4: Indegree");
+		colorNodesByToName.put(PASSDecorator.ColorNodesBy.OUTDEGREE_SCALED, "Degree--Scaled^-1/4: Outdegree");
 		colorNodesByToName.put(PASSDecorator.ColorNodesBy.DEPTH, "Depth");
 		
 		for (Map.Entry<PASSDecorator.ColorNodesBy, String> e : colorNodesByToName.entrySet()) {
@@ -100,7 +120,23 @@ public class LegendPanel extends JPanel {
 		}
 		
 		Vector<String> colorNodesByNames = new Vector<String>();
-		colorNodesByNames.addAll(nameToColorNodesBy.keySet());
+		colorNodesByList = new ArrayList<PASSDecorator.ColorNodesBy>();
+		colorNodesByToIndex = new HashMap<PASSDecorator.ColorNodesBy, Integer>();
+		
+		int ci = 0;
+		
+		for (String s : nameToColorNodesBy.keySet()) {
+			
+			colorNodesByList.add(nameToColorNodesBy.get(s));
+			colorNodesByToIndex.put(nameToColorNodesBy.get(s), ci);
+			
+			if (s.contains("--")) {
+				s = "  -- " + s.substring(s.indexOf("--") + 2);
+			}
+			colorNodesByNames.add(s);
+			
+			ci++;
+		}
 		
 		
 		// Initialize the panel
@@ -151,16 +187,34 @@ public class LegendPanel extends JPanel {
 		
 		// Node colors
 		
-		nodeColorTitleLabel = new JLabel("Nodes, color by:  ");
+		nodeColorTitleLabel = new JLabel("Nodes");
 		nodeColorTitleLabel.setVerticalAlignment(JLabel.CENTER);
 		c.gridx = 0;
 		c.gridy = gridy;
-		c.gridwidth = 2;
+		c.gridwidth = 3;
 		panel.add(nodeColorTitleLabel, c);
+		c.gridwidth = 1;
+
+		gridy++;
+		
+		c.gridx = 0;
+		c.gridy = gridy;
+		c.gridwidth = 3;
+		panel.add(new JLabel(" "), c);
+		c.gridwidth = 1;
+		
+		gridy++;
+		
+		JLabel nodeColorByLabel = new JLabel("Color by:  ");
+		nodeColorByLabel.setVerticalAlignment(JLabel.CENTER);
+		c.gridx = 0;
+		c.gridy = gridy;
+		c.gridwidth = 2;
+		panel.add(nodeColorByLabel, c);
 		c.gridwidth = 1;
 		
 		nodeColorComboBox = new JComboBox(colorNodesByNames);
-		nodeColorComboBox.setSelectedItem(colorNodesByToName.get(decorator.getColorNodesBy()));
+		nodeColorComboBox.setSelectedIndex(colorNodesByToIndex.get(decorator.getColorNodesBy()));
 		nodeColorComboBox.addActionListener(handler);
 		c.gridx = 2;
 		c.gridy = gridy;
@@ -184,11 +238,13 @@ public class LegendPanel extends JPanel {
 		c.gridx = 0;
 		c.gridwidth = 3;
 		
-		c.gridy = gridy++;
-		panel.add(new JLabel("Agent",
-				new NodeEdgeIcon(decorator.colorAgent, decorator.nodeOutlineColor,
-						NodeEdgeIcon.Shape.ELLIPSE, w, h),
-				JLabel.LEFT), c);
+		if (PASSDecorator.DEFAULT_COLOR_SCHEME != PASSDecorator.ColorScheme.INPROV) {
+			c.gridy = gridy++;
+			panel.add(new JLabel("Agent",
+					new NodeEdgeIcon(decorator.colorAgent, decorator.nodeOutlineColor,
+							NodeEdgeIcon.Shape.ELLIPSE, w, h),
+					JLabel.LEFT), c);
+		}
 		
 		c.gridy = gridy++;
 		panel.add(new JLabel("Artifact or File",
@@ -202,17 +258,19 @@ public class LegendPanel extends JPanel {
 						NodeEdgeIcon.Shape.ELLIPSE, w, h),
 				JLabel.LEFT), c);
 		
-		c.gridy = gridy++;
-		panel.add(new JLabel("Non-Provenance File",
-				new NodeEdgeIcon(decorator.colorNPFile, decorator.nodeOutlineColor,
-						NodeEdgeIcon.Shape.ELLIPSE, w, h),
-				JLabel.LEFT), c);
-		
-		c.gridy = gridy++;
-		panel.add(new JLabel("Pipe",
-				new NodeEdgeIcon(decorator.colorPipe, decorator.nodeOutlineColor,
-						NodeEdgeIcon.Shape.ELLIPSE, w, h),
-				JLabel.LEFT), c);
+		if (PASSDecorator.DEFAULT_COLOR_SCHEME != PASSDecorator.ColorScheme.INPROV) {
+			c.gridy = gridy++;
+			panel.add(new JLabel("Non-Provenance File",
+					new NodeEdgeIcon(decorator.colorNPFile, decorator.nodeOutlineColor,
+							NodeEdgeIcon.Shape.ELLIPSE, w, h),
+					JLabel.LEFT), c);
+			
+			c.gridy = gridy++;
+			panel.add(new JLabel("Pipe",
+					new NodeEdgeIcon(decorator.colorPipe, decorator.nodeOutlineColor,
+							NodeEdgeIcon.Shape.ELLIPSE, w, h),
+					JLabel.LEFT), c);
+		}
 		
 		c.gridy = gridy++;
 		panel.add(new JLabel("Other",
@@ -371,6 +429,16 @@ public class LegendPanel extends JPanel {
 	public PGraph getGraph() {
 		return graph;
 	}
+	
+	
+	/**
+	 * Reset the display's decorator settings from the current GUI state
+	 */
+	public void resetDisplayDecorator() {
+		PASSDecorator.ColorNodesBy c = colorNodesByList.get(nodeColorComboBox.getSelectedIndex());
+		decorator.setColorNodesBy(c);
+		display.repaint();
+	}
 
 
 	/**
@@ -396,9 +464,7 @@ public class LegendPanel extends JPanel {
 			// ComboBox
 			
 			if (e.getSource() == nodeColorComboBox) {
-				PASSDecorator.ColorNodesBy c = nameToColorNodesBy.get(nodeColorComboBox.getSelectedItem());
-				decorator.setColorNodesBy(c);
-				display.repaint();
+				resetDisplayDecorator();
 			}
 		}
 	}

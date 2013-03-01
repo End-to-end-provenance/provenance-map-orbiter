@@ -31,6 +31,16 @@
 
 package edu.harvard.util.graph.layout;
 
+import java.util.Map;
+
+import javax.xml.transform.sax.TransformerHandler;
+
+import org.w3c.dom.Element;
+import org.xml.sax.SAXException;
+import org.xml.sax.helpers.AttributesImpl;
+
+import edu.harvard.util.ParserException;
+import edu.harvard.util.XMLUtils;
 import edu.harvard.util.graph.*;
 
 
@@ -43,6 +53,8 @@ public class GraphLayoutNode implements java.io.Serializable {
 	
 	private static final long serialVersionUID = 2561776526577254844L;
 	
+	public static final String DOM_ELEMENT = "layout-node";
+
 	protected BaseNode node;
 	protected double x;
 	protected double y;
@@ -211,5 +223,123 @@ public class GraphLayoutNode implements java.io.Serializable {
 	 */
 	public String toString() {
 		return "" + node + " [pos=" + x + ":" + y + ", size=" + width + "x" + height + "]";
+	}
+
+	
+	/**
+	 * Write the node to XML
+	 * 
+	 * @param hd the XML output
+	 * @throws SAXException on error
+	 */
+	public void writeToXML(TransformerHandler hd) throws SAXException {
+
+		String s;
+		AttributesImpl attrs = new AttributesImpl();
+		
+		attrs.clear();
+		attrs.addAttribute("", "", "index", "CDATA", "" + getIndex());
+		hd.startElement("", "", DOM_ELEMENT, attrs);
+		
+		
+		// Write the basic attributes
+		
+		attrs.clear();
+		
+		s = "" + x;
+		hd.startElement("", "", "x", attrs);
+		hd.characters(s.toCharArray(), 0, s.length());
+		hd.endElement("", "", "x");
+		
+		s = "" + y;
+		hd.startElement("", "", "y", attrs);
+		hd.characters(s.toCharArray(), 0, s.length());
+		hd.endElement("", "", "y");
+		
+		s = "" + width;
+		hd.startElement("", "", "width", attrs);
+		hd.characters(s.toCharArray(), 0, s.length());
+		hd.endElement("", "", "width");
+		
+		s = "" + height;
+		hd.startElement("", "", "height", attrs);
+		hd.characters(s.toCharArray(), 0, s.length());
+		hd.endElement("", "", "height");
+
+		
+		// Finish
+		
+		hd.endElement("", "", DOM_ELEMENT);
+	}
+	
+	
+	/**
+	 * Load the node from an XML element
+	 * 
+	 * @param layout the graph layout
+	 * @param indexRemap the map for remapping the node indices
+	 * @param element the XML element
+	 * @return the node object
+	 * @throws ParserException on DOM parser error
+	 */
+	public static GraphLayoutNode loadFromXML(GraphLayout layout, Map<Integer, Integer> indexRemap,
+			Element element) throws ParserException {
+		
+		if (!element.getNodeName().equals(DOM_ELEMENT)) {
+			throw new ParserException("Expected <" + DOM_ELEMENT + ">, found <" + element.getNodeName() + ">");
+		}
+		
+		
+		// Attributes
+		
+		int index = Integer.parseInt(XMLUtils.getAttribute(element, "index"));
+		
+		Integer newIndex = indexRemap == null ? null : indexRemap.get(index);
+		if (newIndex != null) index = newIndex.intValue();
+
+		BaseNode node = layout.getGraph().getBaseNode(index);
+		if (node == null) {
+			throw new ParserException("Node with index " + index + " does not exist");
+		}
+		
+		
+		// Parse the basic properties
+		
+		String s;
+		
+		s = XMLUtils.getTextValue(element, "x", null);
+		if (s == null) {
+			throw new ParserException("Layout node with index " + index + " does not contain element <x>");
+		}
+		double x = Double.parseDouble(s);
+		
+		s = XMLUtils.getTextValue(element, "y", null);
+		if (s == null) {
+			throw new ParserException("Layout node with index " + index + " does not contain element <y>");
+		}
+		double y = Double.parseDouble(s);
+		
+		s = XMLUtils.getTextValue(element, "width", null);
+		if (s == null) {
+			throw new ParserException("Layout node with index " + index + " does not contain element <width>");
+		}
+		double width = Double.parseDouble(s);
+		
+		s = XMLUtils.getTextValue(element, "height", null);
+		if (s == null) {
+			throw new ParserException("Layout node with index " + index + " does not contain element <height>");
+		}
+		double height = Double.parseDouble(s);
+		
+		
+		// Create the object
+		
+		GraphLayoutNode l = new GraphLayoutNode(node, x, y);
+		l.setSize(width, height);
+
+		
+		// Finish
+		
+		return l;
 	}
 }

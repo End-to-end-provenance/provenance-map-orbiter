@@ -65,6 +65,16 @@ public class TimestampsSummarizer implements GraphSummarizer {
 	
 	
 	/**
+	 * Get the name of the summarization algorithm
+	 * 
+	 * @return the name of the summarization algorithm
+	 */
+	public String getName() {
+		return "Timestamps";
+	}
+	
+	
+	/**
 	 * Get a time of the given node
 	 * 
 	 * @param node the node

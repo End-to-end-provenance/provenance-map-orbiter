@@ -136,6 +136,19 @@ public class BaseEdge implements Serializable, Comparable<BaseEdge> {
 		return to;
 	}
 	
+
+	/**
+	 * Return the other node
+	 * 
+	 * @param node the node
+	 * @return the other node
+	 */
+	public BaseNode getBaseOther(BaseNode node) {
+		if (node == from) return to;
+		if (node ==   to) return from;
+		throw new IllegalArgumentException("Not an endpoint");
+	}
+	
 	
 	/**
 	 * Get the label

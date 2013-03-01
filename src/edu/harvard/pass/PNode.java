@@ -42,6 +42,9 @@ import java.util.Map.Entry;
 
 import javax.xml.transform.sax.TransformerHandler;
 
+import org.jgrapht.DirectedGraph;
+import org.jgrapht.GraphPath;
+import org.jgrapht.alg.FloydWarshallShortestPaths;
 import org.w3c.dom.Element;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.AttributesImpl;
@@ -79,9 +82,7 @@ public class PNode extends Node<PNode, PEdge> implements Serializable, WithTimeI
 	/*
 	 * Node attributes
 	 */
-	
 	private double time;
-	
 	protected Map<String, String> attributes;
 	
 	
@@ -95,6 +96,7 @@ public class PNode extends Node<PNode, PEdge> implements Serializable, WithTimeI
 	 * Graph algorithm fields
 	 */
 	private transient double aux;
+	private double subrank;
 	private double provrank;
 
 
@@ -143,6 +145,7 @@ public class PNode extends Node<PNode, PEdge> implements Serializable, WithTimeI
 		this.attributes = null;
 		
 		this.aux = 0;
+		this.subrank = Double.MIN_VALUE;	// Not set
 		this.provrank = Double.MIN_VALUE;	// Not set
 		this.useComputedLabel = true;
 		
@@ -163,9 +166,12 @@ public class PNode extends Node<PNode, PEdge> implements Serializable, WithTimeI
 		p.time = time;
 		p.freezeTime = freezeTime;
 		
+		p.subrank = subrank;
 		p.provrank = provrank;
 		p.id = id;
 		p.useComputedLabel = useComputedLabel;
+		
+		p.original = getOriginal();
 		
 		if (p.useComputedLabel) p.setLabel(p.computeNodeLabel());
 		p.setVisible(isVisible());
@@ -434,6 +440,26 @@ public class PNode extends Node<PNode, PEdge> implements Serializable, WithTimeI
 	
 	
 	/**
+	 * Get the SubRank of the node
+	 * 
+	 * @return the SubRank
+	 */
+	public double getSubRank() {
+		return subrank;
+	}
+	
+	
+	/**
+	 * Set the SubRank of the node
+	 * 
+	 * @param rank the new value of SubRank
+	 */
+	public void setSubRank(double rank) {
+		this.subrank = rank;
+	}
+	
+	
+	/**
 	 * Get the ProvRank of the node
 	 * 
 	 * @return the ProvRank
@@ -492,7 +518,9 @@ public class PNode extends Node<PNode, PEdge> implements Serializable, WithTimeI
 	 * @return the CSV header string
 	 */
 	public static String getHeaderCSV() {
-		return "FD,Version,Name,Type,Time,Indegree,Outdegree,ProvRank";
+		return "ID,FD,Version,Name,Type,Time,Indegree,Outdegree"
+				+ ",SubRank,SubRank_MaxLogJump,SubRank_MeanLogJump"
+				+ ",ProvRank,ProvRank_MaxLogJump,ProvRank_MeanLogJump";
 	}
 	
 	
@@ -504,15 +532,64 @@ public class PNode extends Node<PNode, PEdge> implements Serializable, WithTimeI
 	public String toCSV() {
 		StringBuilder b = new StringBuilder();
 		
-		b.append(object.getFD());
+		b.append("\"" + getPublicID() + "\"");
+		b.append(","); b.append(object.getFD());
 		b.append(","); b.append(getVersion());
 		b.append(","); b.append("\"" + object.getName() + "\"");
 		b.append(","); b.append("\"" + object.getType() + "\"");
 		b.append(","); b.append(getTime());
 		b.append(","); b.append(getIncomingEdges().size());
 		b.append(","); b.append(getOutgoingEdges().size());
+		
+		
+		// SubRank
+		
+		b.append(","); b.append(Utils.LONG_DECIMAL_FORMAT.format(getSubRank()));
+		
+		double sum = 0;		
+		double max = Double.MIN_VALUE;
+		for (PEdge e : getIncomingEdges()) {
+			PNode from = e.getFrom();
+			double d = Math.log(getSubRank()) - Math.log(from.getSubRank());
+			sum += d;
+			if (d > max) max = d;
+		}
+		
+		b.append(","); b.append(Utils.LONG_DECIMAL_FORMAT.format(max));
+		
+		double mean = 0;
+		if (!getIncomingEdges().isEmpty()) {
+			mean = sum / getIncomingEdges().size();
+		}
+		
+		b.append(","); b.append(Utils.LONG_DECIMAL_FORMAT.format(mean));
+		
+		
+		// ProvRank
+		
 		b.append(","); b.append(Utils.LONG_DECIMAL_FORMAT.format(getProvRank()));
 		
+		sum = 0;		
+		max = Double.MIN_VALUE;
+		for (PEdge e : getIncomingEdges()) {
+			PNode from = e.getFrom();
+			double d = Math.log(getProvRank()) - Math.log(from.getProvRank());
+			sum += d;
+			if (d > max) max = d;
+		}
+		
+		b.append(","); b.append(Utils.LONG_DECIMAL_FORMAT.format(max));
+		
+		mean = 0;
+		if (!getIncomingEdges().isEmpty()) {
+			mean = sum / getIncomingEdges().size();
+		}
+		
+		b.append(","); b.append(Utils.LONG_DECIMAL_FORMAT.format(mean));
+		
+		
+		// Finish
+	
 		return b.toString();
 	}
 
@@ -538,6 +615,31 @@ public class PNode extends Node<PNode, PEdge> implements Serializable, WithTimeI
 	
 	
 	/**
+	 * Node comparator by SubRank first
+	 * 
+	 * @author Peter Macko
+	 */
+	public static class SubRankComparator implements Comparator<PNode> {
+
+		/**
+		 * Compare two nodes
+		 * 
+		 * @param A the first node
+		 * @param B the second node
+		 * @return a negative number if A &lt; B, 0 if A = B, or a positive number if A &gt; B
+		 */
+		@Override
+		public int compare(PNode A, PNode B) {
+			
+			if (A.subrank < B.subrank) return -1;
+			if (A.subrank > B.subrank) return  1;
+			
+			return A.compareTo(B);
+		}
+	}
+	
+	
+	/**
 	 * Node comparator by ProvRank first
 	 * 
 	 * @author Peter Macko
@@ -559,6 +661,22 @@ public class PNode extends Node<PNode, PEdge> implements Serializable, WithTimeI
 			
 			return A.compareTo(B);
 		}
+	}
+	
+	
+	/**
+	 * Find a shortest path to another node
+	 * 
+	 * @param target the target node
+	 * @return the shortest path as an edge list
+	 */
+	public List<PEdge> findShortestPathTo(PNode target) {
+		
+		DirectedGraph<BaseNode, BaseEdge> g = object.getGraph().getBaseJGraphTAdapter();
+		FloydWarshallShortestPaths<BaseNode, BaseEdge> sp = new FloydWarshallShortestPaths<BaseNode, BaseEdge>(g);
+		GraphPath<BaseNode, BaseEdge> p = sp.getShortestPath(this, target);
+
+		return p == null ? null : Utils.<List<PEdge>>cast(p.getEdgeList());
 	}
 
 	
@@ -607,6 +725,13 @@ public class PNode extends Node<PNode, PEdge> implements Serializable, WithTimeI
 			hd.startElement("", "", "freeze-time", attrs);
 			hd.characters(s.toCharArray(), 0, s.length());
 			hd.endElement("", "", "freeze-time");
+		}
+		
+		if (subrank != Double.MIN_VALUE) {
+			s = Double.toHexString(subrank);
+			hd.startElement("", "", "subrank", attrs);
+			hd.characters(s.toCharArray(), 0, s.length());
+			hd.endElement("", "", "subrank");
 		}
 		
 		if (provrank != Double.MIN_VALUE) {
@@ -683,6 +808,9 @@ public class PNode extends Node<PNode, PEdge> implements Serializable, WithTimeI
 		
 		String s_freezeTime = XMLUtils.getTextValue(element, "freeze-time", null);
 		if (s_freezeTime != null) node.freezeTime = Double.parseDouble(s_freezeTime);
+		
+		String s_subrank = XMLUtils.getTextValue(element, "subrank", null);
+		if (s_subrank != null) node.subrank = Double.parseDouble(s_subrank);
 		
 		String s_provrank = XMLUtils.getTextValue(element, "provrank", null);
 		if (s_provrank != null) node.provrank = Double.parseDouble(s_provrank);
