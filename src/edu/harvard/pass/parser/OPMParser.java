@@ -179,6 +179,7 @@ public class OPMParser implements Parser, HasWizardPanelConfigGUI {
 		
 		PMeta meta = new PMeta();
 		meta.addObjectAttributeCode("Type", PObject.Attribute.TYPE);
+		meta.addObjectAttributeCode("#name", PObject.Attribute.NAME);
 		meta.addObjectExtType("Agent", PObject.Type.AGENT);
 		meta.addObjectExtType("Artifact", PObject.Type.ARTIFACT);
 		meta.addObjectExtType("Process", PObject.Type.PROCESS);
@@ -201,10 +202,16 @@ public class OPMParser implements Parser, HasWizardPanelConfigGUI {
 				
 				if (DEBUG) System.err.println("  " + id);
 				
+				boolean hasName = false;
+				
 				for (JAXBElement<? extends EmbeddedAnnotation> e : a.getAnnotation()) {
 					updateMeta(meta, e);
-					handler.loadTripleAttribute(id, e.getName().toString(), annotationToString(e.getValue()));
+					String attribute = e.getName().toString();
+					handler.loadTripleAttribute(id, attribute, annotationToString(e.getValue()));
+					if (meta.getObjectAttributeCode(attribute) == PObject.Attribute.NAME) hasName = true;
 				}
+				
+				if (!hasName) handler.loadTripleAttribute(id, "#name", id);
 			}
 		}
 		
@@ -220,10 +227,16 @@ public class OPMParser implements Parser, HasWizardPanelConfigGUI {
 				
 				if (DEBUG) System.err.println("  " + id);
 				
+				boolean hasName = false;
+			
 				for (JAXBElement<? extends EmbeddedAnnotation> e : a.getAnnotation()) {
 					updateMeta(meta, e);
-					handler.loadTripleAttribute(id, e.getName().toString(), annotationToString(e.getValue()));
+					String attribute = e.getName().toString();
+					handler.loadTripleAttribute(id, attribute, annotationToString(e.getValue()));
+					if (meta.getObjectAttributeCode(attribute) == PObject.Attribute.NAME) hasName = true;
 				}
+				
+				if (!hasName) handler.loadTripleAttribute(id, "#name", id);
 			}
 		}
 		
@@ -239,10 +252,16 @@ public class OPMParser implements Parser, HasWizardPanelConfigGUI {
 				
 				if (DEBUG) System.err.println("  " + id);
 				
+				boolean hasName = false;
+
 				for (JAXBElement<? extends EmbeddedAnnotation> e : p.getAnnotation()) {
 					updateMeta(meta, e);
-					handler.loadTripleAttribute(id, e.getName().toString(), annotationToString(e.getValue()));
+					String attribute = e.getName().toString();
+					handler.loadTripleAttribute(id, attribute, annotationToString(e.getValue()));
+					if (meta.getObjectAttributeCode(attribute) == PObject.Attribute.NAME) hasName = true;
 				}
+				
+				if (!hasName) handler.loadTripleAttribute(id, "#name", id);
 			}
 		}
 		
